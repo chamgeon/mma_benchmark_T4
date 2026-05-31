@@ -1,4 +1,4 @@
-//tiledmma with dynamic smem
+//smem swizzle
 
 #include <cstdlib>
 #include <cstdio>
@@ -13,15 +13,6 @@
 #include <thrust/device_vector.h>
 #include <cute/tensor.hpp>
 
-template <class ElementA,
-          class ElementB,
-          class SmemLayoutA,
-          class SmemLayoutB>
-struct SharedStorage
-{
-  cute::ArrayEngine<ElementA, cute::cosize_v<SmemLayoutA>> A;
-  cute::ArrayEngine<ElementB, cute::cosize_v<SmemLayoutB>> B;
-};
 
 template <class TABC, class glayoutA, class glayoutB, class glayoutC,
           class CTAtiler, class slayoutA, class slayoutB,
@@ -44,11 +35,10 @@ void tiled_mma_kernel(
     Tensor gB = local_tile(tensor_B, cta_tiler, cta_coord, Step<X, _1,_1>{});   // (bN, bK, k)
     Tensor gC = local_tile(tensor_C, cta_tiler, cta_coord, Step<_1, _1,X>{});   // (bM, bN)
 
-    extern __shared__ char shared_memory[];
-    using SharedStorage = SharedStorage<TABC, TABC, slayoutA, slayoutB>;
-    SharedStorage& smem = *reinterpret_cast<SharedStorage*>(shared_memory);
-    Tensor sA = make_tensor(make_smem_ptr(smem.A.begin()), sl_A);   // (bM, bK)
-    Tensor sB = make_tensor(make_smem_ptr(smem.B.begin()), sl_B);   // (bN, bK)
+    __shared__ TABC smemA[cosize_v<slayoutA>];
+    __shared__ TABC smemB[cosize_v<slayoutB>];
+    Tensor sA = make_tensor(make_smem_ptr(smemA), sl_A);   // (bM, bK)
+    Tensor sB = make_tensor(make_smem_ptr(smemB), sl_B);   // (bN, bK)
 
     ThrCopy thr_copy_gs = copy_gs.get_thread_slice(threadIdx.x);
     Tensor thr_gs_gA = thr_copy_gs.partition_S(gA);   // (copy gs atom val, block-tile layout, k)
@@ -162,13 +152,13 @@ int main(int argc, char** argv){
 
     for (int i=0; i<gmem_size_A; ++i) h_gmem_A[i] = static_cast<TABC>(2*(rand()/double(RAND_MAX))-1);
     for (int i=0; i<gmem_size_B; ++i) h_gmem_B[i] = static_cast<TABC>(2*(rand()/double(RAND_MAX))-1);
-    for (int i=0; i<gmem_size_C; ++i) h_gmem_C[i] = static_cast<TABC>(-1);
+    for (int i=0; i<gmem_size_C; ++i) h_gmem_C[i] = static_cast<TABC>(2*(rand()/double(RAND_MAX))-1);
     d_gmem_A = h_gmem_A;
     d_gmem_B = h_gmem_B;
     d_gmem_C = h_gmem_C;
 
-    TABC alpha = static_cast<TABC>(1.0);
-    TABC beta = static_cast<TABC>(0.0);
+    TABC alpha = static_cast<TABC>(0.7);
+    TABC beta = static_cast<TABC>(0.3);
 
     //layouts
 
@@ -193,8 +183,15 @@ int main(int argc, char** argv){
     auto const smem_shape_B = make_shape(shape_bN, shape_bK);
     auto const smem_stride_A = make_stride(shape_bK, Int<1>{});   //K major
     auto const smem_stride_B = make_stride(shape_bK, Int<1>{});   //K major
-    auto const smem_layout_A = make_layout(smem_shape_A, smem_stride_A);
-    auto const smem_layout_B = make_layout(smem_shape_B, smem_stride_B);
+    auto const swizzle = Swizzle<3, 3, 3>{};
+    auto const smem_layout_A = composition(
+        swizzle,
+        make_layout(smem_shape_A, smem_stride_A)
+    );
+    auto const smem_layout_B = composition(
+        swizzle,
+        make_layout(smem_shape_B, smem_stride_B)
+    );
     auto const cta_tiler = make_shape(shape_bM, shape_bN, shape_bK);
 
     auto const copy_gs_thread_shape = make_shape(Int<16>{}, Int<8>{});
@@ -221,24 +218,8 @@ int main(int argc, char** argv){
     dim3 gridDim(size(ceil_div(shape_M, shape_bM)), size(ceil_div(shape_N, shape_bN)));
     dim3 blockDim(size(copy_gs_thread_layout));
 
-    //allocate dynamic smem
-    int smem_size = int(sizeof(SharedStorage<TABC, TABC, decltype(smem_layout_A), decltype(smem_layout_B)>));
-
-    auto kernel_fptr = tiled_mma_kernel<
-        TABC,
-        decltype(gmem_layout_A), decltype(gmem_layout_B), decltype(gmem_layout_C),
-        decltype(cta_tiler), decltype(smem_layout_A), decltype(smem_layout_B),
-        decltype(copy_gs), decltype(copy_sr_A), decltype(copy_sr_B), decltype(mma)>;
-    
-    cudaFuncSetAttribute(
-        kernel_fptr,
-        cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
-    cudaFuncSetAttribute(
-        kernel_fptr,
-        cudaFuncAttributePreferredSharedMemoryCarveout, 100);
-    
     auto run_gemm = [&]() {
-        kernel_fptr<<<gridDim, blockDim, smem_size>>>(
+        tiled_mma_kernel<<<gridDim, blockDim>>>(
             d_gmem_A.data().get(), d_gmem_B.data().get(), d_gmem_C.data().get(), alpha, beta,
             gmem_layout_A, gmem_layout_B, gmem_layout_C,
             cta_tiler, smem_layout_A, smem_layout_B,
@@ -250,12 +231,10 @@ int main(int argc, char** argv){
     //correctness
     #if 0
 
+    auto h_gmem_C_ref = h_gmem_C;
+
     run_gemm();
     h_gmem_C = d_gmem_C;
-
-    auto h_gmem_C_ref = thrust::host_vector<TABC>(gmem_size_C);
-    for (int i=0; i<gmem_size_C; ++i) h_gmem_C_ref[i] = static_cast<TABC>(-1);
-
     gemm_cpu_reference<M,N,K>(
         thrust::raw_pointer_cast(h_gmem_A.data()),
         thrust::raw_pointer_cast(h_gmem_B.data()),
@@ -307,7 +286,7 @@ int main(int argc, char** argv){
     double total_flops = 2.0 * M * N * K;
     double gflops_per_sec = (total_flops) / (avg_time_ms * 1.0e6);
     times.clear();
-    std::cout << "kernel_1: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
+    std::cout << "kernel_3: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
     #endif
 
     return 0;

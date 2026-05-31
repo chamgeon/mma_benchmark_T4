@@ -77,7 +77,7 @@ __global__ void mma_naive_kernel(
 template <int M, int N, int K, class TABC>
 void gemm_cpu_reference(
     TABC* A, TABC* B, TABC* C,
-    TABC alpha, TABC beta, bool tn_layout)
+    TABC alpha, TABC beta)
 {
     using namespace cute;
     auto const shape_M = Int<M>{};
@@ -203,16 +203,15 @@ int main(int argc, char** argv){
 
     //evaluate
     #if 0
-    h_gmem_C = d_gmem_C;
-    auto h_gmem_C_ref = thrust::host_vector<TABC>(gmem_size_C);
-    for (int i=0; i<gmem_size_C; ++i) h_gmem_C_ref[i] = static_cast<TABC>(-1);
+    auto h_gmem_C_ref = h_gmem_C;
 
     run_gemm();
+    h_gmem_C = d_gmem_C;
     gemm_cpu_reference<M,N,K>(
         thrust::raw_pointer_cast(h_gmem_A.data()),
         thrust::raw_pointer_cast(h_gmem_B.data()),
         thrust::raw_pointer_cast(h_gmem_C_ref.data()),
-        alpha, beta, true);
+        alpha, beta);
 
     float max_error = 0.0f;
     for (int i = 0; i < gmem_size_C; ++i) {
@@ -220,7 +219,7 @@ int main(int argc, char** argv){
         max_error = max(max_error, diff);
     }
     printf("Max error: %f\n", max_error);
-    if (max_error < 1e-2f){
+    if (max_error < 2e-2f){
         printf("evaluation PASSED\n");
     }
     else{

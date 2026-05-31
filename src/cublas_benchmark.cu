@@ -71,12 +71,13 @@ int main(int argc, char *argv[]){
     float elapsed;
 
     for (int i=0; i<num_runs; ++i){
-        cudaEventRecord(start);
+        cudaEventRecord(start,0);
         run_gemm();
-        cudaEventRecord(stop);
+        cudaEventRecord(stop,0);
         cudaEventSynchronize(stop);
         cudaEventElapsedTime(&elapsed, start, stop);
         times.push_back(elapsed);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     double avg_time_ms = std::accumulate(times.begin(), times.end(), 0.0) / times.size();

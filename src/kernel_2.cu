@@ -153,13 +153,13 @@ int main(int argc, char** argv){
 
     for (int i=0; i<gmem_size_A; ++i) h_gmem_A[i] = static_cast<TABC>(2*(rand()/double(RAND_MAX))-1);
     for (int i=0; i<gmem_size_B; ++i) h_gmem_B[i] = static_cast<TABC>(2*(rand()/double(RAND_MAX))-1);
-    for (int i=0; i<gmem_size_C; ++i) h_gmem_C[i] = static_cast<TABC>(-1);
+    for (int i=0; i<gmem_size_C; ++i) h_gmem_C[i] = static_cast<TABC>(2*(rand()/double(RAND_MAX))-1);
     d_gmem_A = h_gmem_A;
     d_gmem_B = h_gmem_B;
     d_gmem_C = h_gmem_C;
 
-    TABC alpha = static_cast<TABC>(1.0);
-    TABC beta = static_cast<TABC>(0.0);
+    TABC alpha = static_cast<TABC>(0.7);
+    TABC beta = static_cast<TABC>(0.3);
 
     //layouts
 
@@ -213,7 +213,7 @@ int main(int argc, char** argv){
     dim3 blockDim(size(copy_gs_thread_layout));
 
     auto run_gemm = [&]() {
-        tiled_mma_kernel<<<gridDim, blockDim, smem_size>>>(
+        tiled_mma_kernel<<<gridDim, blockDim>>>(
             d_gmem_A.data().get(), d_gmem_B.data().get(), d_gmem_C.data().get(), alpha, beta,
             gmem_layout_A, gmem_layout_B, gmem_layout_C,
             cta_tiler, smem_layout_A, smem_layout_B,
@@ -223,12 +223,10 @@ int main(int argc, char** argv){
 
     //correctness
     #if 0
+    auto h_gmem_C_ref = h_gmem_C;
+
     run_gemm();
     h_gmem_C = d_gmem_C;
-
-    auto h_gmem_C_ref = thrust::host_vector<TABC>(gmem_size_C);
-    for (int i=0; i<gmem_size_C; ++i) h_gmem_C_ref[i] = static_cast<TABC>(-1);
-
     gemm_cpu_reference<M,N,K>(
         thrust::raw_pointer_cast(h_gmem_A.data()),
         thrust::raw_pointer_cast(h_gmem_B.data()),
@@ -280,7 +278,7 @@ int main(int argc, char** argv){
     double total_flops = 2.0 * M * N * K;
     double gflops_per_sec = (total_flops) / (avg_time_ms * 1.0e6);
     times.clear();
-    std::cout << "kernel_1: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
+    std::cout << "kernel_2: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
     #endif
 
 
