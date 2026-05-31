@@ -257,13 +257,11 @@ int main(int argc, char** argv){
     #endif
 
 
-    //benchmark
-    #if 1
-
     //warmup
     run_gemm();
     cudaDeviceSynchronize();
 
+    #if 0
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;

@@ -64,6 +64,7 @@ int main(int argc, char *argv[]){
     cudaDeviceSynchronize();
 
     //main loop
+    #if 0
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -85,6 +86,8 @@ int main(int argc, char *argv[]){
     double gflops_per_sec = (total_flops) / (avg_time_ms * 1.0e6);
     times.clear();
     std::cout << "cuBLAS: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
+    #endif
+    
     cublasDestroy(handle);
     cudaFree(dev_A); cudaFree(dev_B); cudaFree(dev_C);
     free(A); free(B); free(C);
