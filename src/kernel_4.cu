@@ -61,7 +61,7 @@ void tiled_mma_kernel(
 
     clear(thr_mma_rC);
 
-    #if 1
+    #if 0
     if(thread0()){
         print("  tensor_A : "); print(tensor_A); print("\n");
         print("  tensor_B : "); print(tensor_B); print("\n");
@@ -118,7 +118,7 @@ void tiled_mma_kernel(
     }
     #endif
 
-    #if 0
+    #if 1
     int k_tile_num = size<3>(thr_gs_gA);
 
     CUTE_UNROLL
@@ -253,8 +253,8 @@ int main(int argc, char** argv){
     );
     auto const cta_tiler = make_shape(shape_bM, shape_bN, shape_bK);
 
-    auto const copy_gs_thread_shape = make_shape(Int<128>{}, Int<2>{});
-    auto const copy_gs_thread_stride = make_stride(Int<2>{}, Int<1>{});
+    auto const copy_gs_thread_shape = make_shape(Int<64>{}, Int<4>{});
+    auto const copy_gs_thread_stride = make_stride(Int<4>{}, Int<1>{});
     auto const copy_gs_thread_layout = make_layout(copy_gs_thread_shape, copy_gs_thread_stride);
     auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});
     auto const copy_gs_val_layout = make_layout(copy_gs_val_shape);
@@ -321,7 +321,7 @@ int main(int argc, char** argv){
     run_gemm();
     cudaDeviceSynchronize();
 
-    #if 0
+    #if 1
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;

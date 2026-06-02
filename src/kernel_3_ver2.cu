@@ -125,16 +125,16 @@ int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopy<uint128_t>;
-    using CopyOP_SR = SM75_U32x2_LDSM_N;
+    using CopyOP_SR = SM75_U32x1_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
-    //constexpr int M{8192};
-    //constexpr int N(8192);
-    //constexpr int K{8192};
+    constexpr int M{8192};
+    constexpr int N(8192);
+    constexpr int K{8192};
     //for correctness test
-    constexpr int M{512};
-    constexpr int N{512};
-    constexpr int K{256};
+    //constexpr int M{512};
+    //constexpr int N{512};
+    //constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{128};
     constexpr int bK{64};
@@ -194,8 +194,9 @@ int main(int argc, char** argv){
     );
     auto const cta_tiler = make_shape(shape_bM, shape_bN, shape_bK);
 
-    auto const copy_gs_thread_shape = make_shape(Int<128>{}, Int<1>{});
-    auto const copy_gs_thread_layout = make_layout(copy_gs_thread_shape);
+    auto const copy_gs_thread_shape = make_shape(Int<16>{}, Int<8>{});
+    auto const copy_gs_thread_stride = make_stride(Int<8>{}, Int<1>{});
+    auto const copy_gs_thread_layout = make_layout(copy_gs_thread_shape, copy_gs_thread_stride);
     auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});
     auto const copy_gs_val_layout = make_layout(copy_gs_val_shape);
 
@@ -228,7 +229,7 @@ int main(int argc, char** argv){
 
 
     //correctness
-    #if 1
+    #if 0
 
     auto h_gmem_C_ref = h_gmem_C;
 
@@ -260,7 +261,7 @@ int main(int argc, char** argv){
     run_gemm();
     cudaDeviceSynchronize();
 
-    #if 0
+    #if 1
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;

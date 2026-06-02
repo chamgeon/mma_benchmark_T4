@@ -261,7 +261,7 @@ int main(int argc, char** argv){
     run_gemm();
     cudaDeviceSynchronize();
 
-    #if 0
+    #if 1
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;
