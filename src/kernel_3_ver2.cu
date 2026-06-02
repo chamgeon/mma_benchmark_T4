@@ -1,4 +1,4 @@
-//change block shape
+//smem swizzle
 
 #include <cstdlib>
 #include <cstdio>
@@ -119,6 +119,7 @@ void tiled_mma_kernel(
     #endif
 
     #if 0
+
     int k_tile_num = size<3>(thr_gs_gA);
 
     CUTE_UNROLL
@@ -194,9 +195,9 @@ int main(int argc, char** argv){
     //constexpr int M{512};
     //constexpr int N{512};
     //constexpr int K{256};
-    constexpr int bM{256};
+    constexpr int bM{128};
     constexpr int bN{128};
-    constexpr int bK{32};
+    constexpr int bK{64};
     
     constexpr int gmem_size_A = M*K;
     constexpr int gmem_size_B = N*K;
@@ -253,15 +254,14 @@ int main(int argc, char** argv){
     );
     auto const cta_tiler = make_shape(shape_bM, shape_bN, shape_bK);
 
-    auto const copy_gs_thread_shape = make_shape(Int<128>{}, Int<2>{});
-    auto const copy_gs_thread_stride = make_stride(Int<2>{}, Int<1>{});
-    auto const copy_gs_thread_layout = make_layout(copy_gs_thread_shape, copy_gs_thread_stride);
+    auto const copy_gs_thread_shape = make_shape(Int<128>{}, Int<1>{});
+    auto const copy_gs_thread_layout = make_layout(copy_gs_thread_shape);
     auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});
     auto const copy_gs_val_layout = make_layout(copy_gs_val_shape);
 
-    auto const mma_warps_shape = make_shape(Int<4>{}, Int<2>{}, Int<1>{});   ///4x2x1 atoms per cta
+    auto const mma_warps_shape = make_shape(Int<2>{}, Int<2>{}, Int<1>{});   ///2x2x1 atoms per cta
     auto const mma_warps_layout = make_layout(mma_warps_shape);
-    auto const mma_tile = make_tile(Int<64>{}, Int<32>{}, Int<8>{});
+    auto const mma_tile = make_tile(Int<32>{}, Int<32>{}, Int<8>{});
 
     //atom, tiledcopy, tiledmma, dims
 
@@ -293,7 +293,6 @@ int main(int argc, char** argv){
     auto h_gmem_C_ref = h_gmem_C;
 
     run_gemm();
-    cudaDeviceSynchronize();
     h_gmem_C = d_gmem_C;
     gemm_cpu_reference<M,N,K>(
         thrust::raw_pointer_cast(h_gmem_A.data()),
