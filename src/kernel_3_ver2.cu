@@ -61,65 +61,6 @@ void tiled_mma_kernel(
 
     clear(thr_mma_rC);
 
-    #if 1
-    if(thread0()){
-        print("  tensor_A : "); print(tensor_A); print("\n");
-        print("  tensor_B : "); print(tensor_B); print("\n");
-        print("  tensor_C : "); print(tensor_C); print("\n\n");
-
-        print("  gA : "); print(gA); print("\n");
-        print("  gB : "); print(gB); print("\n");
-        print("  gC : "); print(gC); print("\n\n");
-        print("  sA : "); print(sA); print("\n");
-        print("  sB : "); print(sB); print("\n\n");
-
-        print("  thr_gs_gA : "); print(thr_gs_gA); print("\n");
-        print("  thr_gs_gB : "); print(thr_gs_gB); print("\n");
-        print("  thr_gs_sA : "); print(thr_gs_sA); print("\n");
-        print("  thr_gs_sB : "); print(thr_gs_sB); print("\n\n");
-
-        print(copy_gs); print("\n\n");
-
-        auto tidfrg_S_gmem_A = copy_gs.tidfrg_S(gA.layout());
-        auto tidfrg_D_smem_A = copy_gs.tidfrg_D(sA.layout());
-        auto tidfrg_S_gmem_B = copy_gs.tidfrg_S(gB.layout());
-        auto tidfrg_D_smem_B = copy_gs.tidfrg_D(sB.layout());
-
-        print("  thrfrg_G_A : "); print(tidfrg_S_gmem_A); print("\n");
-        print("  thrfrg_S_A : "); print(tidfrg_D_smem_A); print("\n");
-        print("  thrfrg_G_B : "); print(tidfrg_S_gmem_B); print("\n");
-        print("  thrfrg_S_B : "); print(tidfrg_D_smem_B); print("\n\n");
-
-        auto thr_thrfrg_A = mma.thrfrg_A(sA.layout());
-        auto thr_thrfrg_B = mma.thrfrg_B(sB.layout());
-        auto thr_thrfrg_C = mma.thrfrg_C(gC.layout());
-
-        print("  thrfrg_A : "); print(thr_thrfrg_A); print("\n");
-        print("  thrfrg_B : "); print(thr_thrfrg_B); print("\n");
-        print("  thrfrg_C : "); print(thr_thrfrg_C); print("\n\n");
-
-        print("  thr_mma_rA : "); print(thr_mma_rA); print("\n");
-        print("  thr_mma_rB : "); print(thr_mma_rB); print("\n");
-        print("  thr_mma_rC : "); print(thr_mma_rC); print("\n\n");
-
-        auto tidfrg_S_A = copy_sr_A.tidfrg_S(sA.layout());
-        auto tidfrg_S_B = copy_sr_B.tidfrg_S(sB.layout());
-
-        print("  tidfrg_S_A : "); print(tidfrg_S_A); print("\n");
-        print("  thrfrg_S_B : "); print(tidfrg_S_B); print("\n\n");
-
-        print("  thr_sr_sA : "); print(thr_sr_sA); print("\n");
-        print("  thr_sr_sB : "); print(thr_sr_sB); print("\n");
-        print("  thr_sr_rA : "); print(thr_sr_rA); print("\n");
-        print("  thr_sr_rB : "); print(thr_sr_rB); print("\n\n");
-
-        print(copy_sr_A); print("\n");
-        print(copy_sr_B); print("\n\n");
-    }
-    #endif
-
-    #if 0
-
     int k_tile_num = size<3>(thr_gs_gA);
 
     CUTE_UNROLL
@@ -134,7 +75,6 @@ void tiled_mma_kernel(
 
         gemm(mma, thr_mma_rA, thr_mma_rB, thr_mma_rC);
     }
-    #endif
 
     axpby(alpha, thr_mma_rC, beta, thr_mma_gC);
 }
@@ -188,13 +128,13 @@ int main(int argc, char** argv){
     using CopyOP_SR = SM75_U32x2_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
-    constexpr int M{8192};
-    constexpr int N(8192);
-    constexpr int K{8192};
+    //constexpr int M{8192};
+    //constexpr int N(8192);
+    //constexpr int K{8192};
     //for correctness test
-    //constexpr int M{512};
-    //constexpr int N{512};
-    //constexpr int K{256};
+    constexpr int M{512};
+    constexpr int N{512};
+    constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{128};
     constexpr int bK{64};
@@ -288,7 +228,7 @@ int main(int argc, char** argv){
 
 
     //correctness
-    #if 0
+    #if 1
 
     auto h_gmem_C_ref = h_gmem_C;
 
