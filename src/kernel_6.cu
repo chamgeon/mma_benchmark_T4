@@ -19,8 +19,9 @@ struct SharedStorage
 template <class TABC, class glayoutA, class glayoutB, class glayoutC,
           class CTAtiler, class slayoutA, class slayoutB,
           class TiledCopyGS, class TiledCopySRA, class TiledCopySRB, class TiledMMA>
+__global__ static
 __launch_bounds__(decltype(size(TiledCopyGS{}))::value)
-__global__ void pipelined_mma_kernel(
+void tiled_mma_kernel(
     TABC* A, TABC* B, TABC* C, TABC alpha, TABC beta,
     glayoutA gl_A, glayoutB gl_B, glayoutC gl_C,
     CTAtiler cta_tiler, slayoutA sl_A, slayoutB sl_B,
@@ -39,172 +40,72 @@ __global__ void pipelined_mma_kernel(
     extern __shared__ char shared_memory[];
     using SharedStorage = SharedStorage<TABC, TABC, slayoutA, slayoutB>;
     SharedStorage& smem = *reinterpret_cast<SharedStorage*>(shared_memory);
-    Tensor sA = make_tensor(make_smem_ptr(smem.A.begin()), sl_A);   // (bM, bK, bP)
-    Tensor sB = make_tensor(make_smem_ptr(smem.B.begin()), sl_B);   // (bN, bK, bP)
+    Tensor sA = make_tensor(make_smem_ptr(smem.A.begin()), sl_A);   // (bM, bK)
+    Tensor sB = make_tensor(make_smem_ptr(smem.B.begin()), sl_B);   // (bN, bK)
 
     ThrCopy thr_copy_gs = copy_gs.get_thread_slice(threadIdx.x);
     Tensor thr_gs_gA = thr_copy_gs.partition_S(gA);   // (copy gs atom val, block-tile layout, k)
     Tensor thr_gs_gB = thr_copy_gs.partition_S(gB);   // (copy gs atom val, block-tile layout, k)
-    Tensor thr_gs_sA = thr_copy_gs.partition_D(sA);   // (copy gs atom val, block-tile layout, bP)
-    Tensor thr_gs_sB = thr_copy_gs.partition_D(sB);   // (copy gs atom val, block-tile layout, bP)
+    Tensor thr_gs_sA = thr_copy_gs.partition_D(sA);   // (copy gs atom val, block-tile layout)
+    Tensor thr_gs_sB = thr_copy_gs.partition_D(sB);   // (copy gs atom val, block-tile layout)
+    Tensor thr_gs_rA = make_fragment_like(thr_gs_sA);
+    Tensor thr_gs_rB = make_fragment_like(thr_gs_sB);
 
     ThrMMA thr_mma = mma.get_thread_slice(threadIdx.x);
-    Tensor thr_mma_rA = thr_mma.partition_fragment_A(sA(_,_,0));   // (mma atom val A, block-cta layout)
-    Tensor thr_mma_rB = thr_mma.partition_fragment_B(sB(_,_,0));   // (mma atom val B, block-cta layout)
+    Tensor thr_mma_rA = thr_mma.partition_fragment_A(sA);   // (mma atom val A, block-cta layout A)
+    Tensor thr_mma_rB = thr_mma.partition_fragment_B(sB);   // (mma atom val B, block-cta layout B)
     Tensor thr_mma_gC = thr_mma.partition_C(gC);
     Tensor thr_mma_rC = thr_mma.make_fragment_C(thr_mma_gC);   // (mma atom val C, block-cta layout C)
 
     ThrCopy thr_copy_sr_A = copy_sr_A.get_thread_slice(threadIdx.x);
     ThrCopy thr_copy_sr_B = copy_sr_B.get_thread_slice(threadIdx.x);
-    Tensor thr_sr_sA = thr_copy_sr_A.partition_S(sA);   // (copy sr atom val, block-cta layout, bP)
-    Tensor thr_sr_sB = thr_copy_sr_B.partition_S(sB);   // (copy sr atom val, block-cta layout, bP)
+    Tensor thr_sr_sA = thr_copy_sr_A.partition_S(sA);   // (copy sr atom val, block-cta layout)
+    Tensor thr_sr_sB = thr_copy_sr_B.partition_S(sB);   // (copy sr atom val, block-cta layout)
     Tensor thr_sr_rA = thr_copy_sr_A.retile_D(thr_mma_rA);   // (copy sr atom val, block-cta layout)
     Tensor thr_sr_rB = thr_copy_sr_B.retile_D(thr_mma_rB);   // (copy sr atom val, block-cta layout)
 
     clear(thr_mma_rC);
 
-    #if 0
-    if(thread0()){
-        print("  tensor_A : "); print(tensor_A); print("\n");
-        print("  tensor_B : "); print(tensor_B); print("\n");
-        print("  tensor_C : "); print(tensor_C); print("\n\n");
-
-        print("  gA : "); print(gA); print("\n");
-        print("  gB : "); print(gB); print("\n");
-        print("  gC : "); print(gC); print("\n\n");
-        print("  sA : "); print(sA); print("\n");
-        print("  sB : "); print(sB); print("\n\n");
-
-        print("  thr_gs_gA : "); print(thr_gs_gA); print("\n");
-        print("  thr_gs_gB : "); print(thr_gs_gB); print("\n");
-        print("  thr_gs_sA : "); print(thr_gs_sA); print("\n");
-        print("  thr_gs_sB : "); print(thr_gs_sB); print("\n\n");
-
-        auto thr_thrfrg_A = mma.thrfrg_A(sA.layout());
-        auto thr_thrfrg_B = mma.thrfrg_B(sB.layout());
-        auto thr_thrfrg_C = mma.thrfrg_C(gC.layout());
-
-        print("  thrfrg_A : "); print(thr_thrfrg_A); print("\n");
-        print("  thrfrg_B : "); print(thr_thrfrg_B); print("\n");
-        print("  thrfrg_C : "); print(thr_thrfrg_C); print("\n\n");
-
-        print("  thr_mma_rA : "); print(thr_mma_rA); print("\n");
-        print("  thr_mma_rB : "); print(thr_mma_rB); print("\n");
-        print("  thr_mma_rC : "); print(thr_mma_rC); print("\n\n");
-
-        auto tidfrg_S_A = copy_sr_A.tidfrg_S(sA.layout());
-        auto tidfrg_S_B = copy_sr_B.tidfrg_S(sB.layout());
-
-        print("  tidfrg_S_A : "); print(tidfrg_S_A); print("\n");
-        print("  thrfrg_S_B : "); print(tidfrg_S_B); print("\n\n");
-
-        print("  thr_sr_sA : "); print(thr_sr_sA); print("\n");
-        print("  thr_sr_sB : "); print(thr_sr_sB); print("\n");
-        print("  thr_sr_rA : "); print(thr_sr_rA); print("\n");
-        print("  thr_sr_rB : "); print(thr_sr_rB); print("\n\n");
-
-        print(copy_sr_A); print("\n");
-        print(copy_sr_B); print("\n\n");
-    }
-    #endif
-
-    #if 1
-    auto K_PIPE_MAX = size<2>(sA);   //bP
-    auto K_BLOCK_MAX = size<2>(thr_mma_rA);
-
     //prefetch
-    int k_tile_next = 0;
-    int k_tile_count = size<3>(thr_gs_gA);   //k
+    copy(copy_gs, thr_gs_gA(_,_,_,0), thr_gs_rA);
+    copy(copy_gs, thr_gs_gB(_,_,_,0), thr_gs_rB);
+    copy(thr_gs_rA, thr_gs_sA);
+    copy(thr_gs_rB, thr_gs_sB);
+    __syncthreads();
 
-    CUTE_UNROLL
-    for(int i=0; i<K_PIPE_MAX-1; ++i){
-        copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_sA(_,_,_,i));
-        copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_sB(_,_,_,i));
-        --k_tile_count;
-        if(k_tile_count>0){++k_tile_next;}
-    }
+    copy(copy_sr_A, thr_sr_sA(_,_,0), thr_sr_rA(_,_,0));
+    copy(copy_sr_B, thr_sr_sB(_,_,0), thr_sr_rB(_,_,0));
 
-    int k_tile_read = 0;
-    int k_tile_write = K_PIPE_MAX-1;
-    auto thr_sr_sA_P = thr_sr_sA(_,_,_,k_tile_read);
-    auto thr_sr_sB_P = thr_sr_sB(_,_,_,k_tile_read);
-
-    if(K_BLOCK_MAX>1){
-        __syncthreads();
-        copy(copy_sr_A, thr_sr_sA_P(_,_,Int<0>{}), thr_sr_rA(_,_,Int<0>{}));
-        copy(copy_sr_B, thr_sr_sB_P(_,_,Int<0>{}), thr_sr_rB(_,_,Int<0>{}));
-    }
 
     //main loop
-    CUTE_NO_UNROLL
-    while(k_tile_count>-(K_PIPE_MAX-1)){
-        CUTE_UNROLL
-        for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
+    auto K_TILE_MAX = size<3>(thr_gs_gA);
+    auto K_BLOCK_MAX = size<2>(thr_mma_rA);
 
+    CUTE_NO_UNROLL
+    for(int k_tile_cur=0; k_tile_cur<K_TILE_MAX; ++k_tile_cur){
+        CUTE_UNROLL
+        for(int k_block_cur=0; k_block_cur < K_BLOCK_MAX; ++k_block_cur){
             if(k_block_cur == K_BLOCK_MAX-1){
-                thr_sr_sA_P = thr_sr_sA(_,_,_,k_tile_read);
-                thr_sr_sB_P = thr_sr_sB(_,_,_,k_tile_read);
+                __syncthreads();
+                copy(thr_gs_rA, thr_gs_sA);
+                copy(thr_gs_rB, thr_gs_sB);
                 __syncthreads();
             }
-
+            
             auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
-            copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
-            copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
+            copy(copy_sr_A, thr_sr_sA(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
+            copy(copy_sr_B, thr_sr_sB(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
 
             if(k_block_cur == 0){
-                if(k_tile_count>0){
-                    copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_sA(_,_,_,k_tile_write));
-                    copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_sB(_,_,_,k_tile_write));
-                }
-                --k_tile_count;
-                if(k_tile_count>0){++k_tile_next;}
-                k_tile_write = k_tile_read;
-                k_tile_read = (k_tile_read == K_PIPE_MAX-1)? 0 : k_tile_read+1;
+                int k_tile_next = (k_tile_cur + 1 < K_TILE_MAX) ? k_tile_cur + 1 : k_tile_cur;
+                copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
+                copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
             }
+
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
     }
-
     axpby(alpha, thr_mma_rC, beta, thr_mma_gC);
-    #endif
-}
-
-
-template <int M, int N, int K, class TABC>
-void gemm_cpu_reference(
-    TABC* A, TABC* B, TABC* C,
-    TABC alpha, TABC beta)
-{
-    using namespace cute;
-    auto const shape_M = Int<M>{};
-    auto const shape_N = Int<N>{};
-    auto const shape_K = Int<K>{};
-
-    auto const gmem_shape_A = make_shape(shape_M,shape_K);
-    auto const gmem_stride_A = make_stride(shape_K, Int<1>{});    //K-major
-    auto const gmem_layout_A = make_layout(gmem_shape_A, gmem_stride_A);
-
-    auto const gmem_shape_B = make_shape(shape_N,shape_K);
-    auto const gmem_stride_B = make_stride(shape_K, Int<1>{});    //K-major
-    auto const gmem_layout_B = make_layout(gmem_shape_B, gmem_stride_B);
-
-    auto const gmem_shape_C = make_shape(shape_M, shape_N);
-    auto const gmem_stride_C = make_stride(Int<1>{}, shape_M);    //M-major
-    auto const gmem_layout_C = make_layout(gmem_shape_C, gmem_stride_C);
-
-    Tensor tensor_A = make_tensor(make_gmem_ptr(A), gmem_layout_A);   //(M,K)
-    Tensor tensor_B = make_tensor(make_gmem_ptr(B), gmem_layout_B);   //(N,K)
-    Tensor tensor_C = make_tensor(make_gmem_ptr(C), gmem_layout_C);   //(M,N)
-
-    for (int m = 0; m < M; ++m)
-        for (int n = 0; n < N; ++n) {
-            float acc = 0.0f;
-            for (int k = 0; k < K; ++k)
-                acc += static_cast<float>(tensor_A(m,k) * tensor_B(n,k));
-            tensor_C(m,n) = static_cast<TABC>(
-                float(alpha) * acc + float(beta) * float(tensor_C(m,n))
-            );
-        }
 }
 
 
@@ -218,13 +119,9 @@ int main(int argc, char** argv){
     constexpr int M{5120};
     constexpr int N(5120);
     constexpr int K{4096};
-    //constexpr int M{512};
-    //constexpr int N{512};
-    //constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{128};
     constexpr int bK{64};
-    constexpr int bP{2};   //pipeline
     
     constexpr int gmem_size_A = M*K;
     constexpr int gmem_size_B = N*K;
@@ -255,7 +152,6 @@ int main(int argc, char** argv){
     auto const shape_bM = Int<bM>{};
     auto const shape_bN = Int<bN>{};
     auto const shape_bK = Int<bK>{};
-    auto const shape_bP = Int<bP>{};
 
     auto const gmem_shape_A = make_shape(shape_M, shape_K);
     auto const gmem_shape_B = make_shape(shape_N, shape_K);
@@ -267,28 +163,34 @@ int main(int argc, char** argv){
     auto const gmem_layout_B = make_layout(gmem_shape_B,gmem_stride_B);
     auto const gmem_layout_C = make_layout(gmem_shape_C,gmem_stride_C);
     
-    auto const smem_shape_A = make_shape(shape_bM, shape_bK, shape_bP);
-    auto const smem_shape_B = make_shape(shape_bN, shape_bK, shape_bP);
-    auto const smem_stride_A = make_stride(shape_bK, Int<1>{}, shape_bK*shape_bM);   //K major, pipeline is outermost
-    auto const smem_stride_B = make_stride(shape_bK, Int<1>{}, shape_bK*shape_bN);   //K major, pipeline is outermost
-    
+    auto const smem_shape_A = make_shape(shape_bM, shape_bK);
+    auto const smem_shape_B = make_shape(shape_bN, shape_bK);
+    auto const smem_stride_A = make_stride(shape_bK, Int<1>{});   //K major
+    auto const smem_stride_B = make_stride(shape_bK, Int<1>{});   //K major
+
     auto const swizzle = Swizzle<3, 3, 3>{};
-    auto const smem_layout_A = composition(swizzle, make_layout(smem_shape_A, smem_stride_A));
-    auto const smem_layout_B = composition(swizzle, make_layout(smem_shape_B, smem_stride_B));
+    auto const smem_layout_A = composition(
+        swizzle,
+        make_layout(smem_shape_A, smem_stride_A)
+    );
+    auto const smem_layout_B = composition(
+        swizzle,
+        make_layout(smem_shape_B, smem_stride_B)
+    );
     auto const cta_tiler = make_shape(shape_bM, shape_bN, shape_bK);
 
     auto const copy_gs_thread_shape = make_shape(Int<16>{}, Int<8>{});
-    auto const copy_gs_thread_stride = make_stride(Int<8>{}, Int<1>{});   //K major
+    auto const copy_gs_thread_stride = make_stride(Int<8>{}, Int<1>{});
     auto const copy_gs_thread_layout = make_layout(copy_gs_thread_shape, copy_gs_thread_stride);
-    auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});   //gs copy tile: (16,64) K major
+    auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});
     auto const copy_gs_val_layout = make_layout(copy_gs_val_shape);
 
-    auto const mma_warps_shape = make_shape(Int<2>{}, Int<2>{}, Int<1>{});   //2x2x1 atoms per cta -> 32x16x8 mma cta
+    auto const mma_warps_shape = make_shape(Int<2>{}, Int<2>{}, Int<1>{});   ///2x2x1 atoms per cta
     auto const mma_warps_layout = make_layout(mma_warps_shape);
-    auto const mma_tile = make_tile(Int<32>{}, Int<32>{}, Int<8>{});   //cta repeats twice over the N dim
+    auto const mma_tile = make_tile(Int<32>{}, Int<32>{}, Int<8>{});
+
 
     //atom, tiledcopy, tiledmma, dims
-
     Copy_Atom<CopyOP_GS, TABC> copy_atom_gs;
     Copy_Atom<CopyOP_SR, TABC> copy_atom_sr;
     MMA_Atom<MMAOP> mma_atom;
@@ -299,12 +201,13 @@ int main(int argc, char** argv){
     auto const copy_sr_B = make_tiled_copy_B(copy_atom_sr, mma);
 
     dim3 gridDim(size(ceil_div(shape_M, shape_bM)), size(ceil_div(shape_N, shape_bN)));
-    dim3 blockDim(size(copy_gs_thread_layout));   //128
+    dim3 blockDim(size(copy_gs_thread_layout));
+
 
     //kernel launch
     int smem_size = int(sizeof(SharedStorage<TABC, TABC, decltype(smem_layout_A), decltype(smem_layout_B)>));
 
-    auto kernel_fptr = pipelined_mma_kernel<
+    auto kernel_fptr = tiled_mma_kernel<
         TABC,
         decltype(gmem_layout_A), decltype(gmem_layout_B), decltype(gmem_layout_C),
         decltype(cta_tiler), decltype(smem_layout_A), decltype(smem_layout_B),
@@ -318,40 +221,6 @@ int main(int argc, char** argv){
         kernel_fptr,
         cudaFuncAttributePreferredSharedMemoryCarveout, 100);
 
-    kernel_fptr<<<gridDim, blockDim, smem_size>>>(
-        d_gmem_A.data().get(), d_gmem_B.data().get(), d_gmem_C.data().get(), alpha, beta,
-        gmem_layout_A, gmem_layout_B, gmem_layout_C,
-        cta_tiler, smem_layout_A, smem_layout_B,
-        copy_gs, copy_sr_A, copy_sr_B, mma
-    );
-    cudaDeviceSynchronize();
-
-    //correctness
-    #if 0
-    h_gmem_C = d_gmem_C;
-    auto h_gmem_C_ref = thrust::host_vector<TABC>(gmem_size_C);
-    for (int i=0; i<gmem_size_C; ++i) h_gmem_C_ref[i] = static_cast<TABC>(-1);
-
-    gemm_cpu_reference<M,N,K>(
-        thrust::raw_pointer_cast(h_gmem_A.data()),
-        thrust::raw_pointer_cast(h_gmem_B.data()),
-        thrust::raw_pointer_cast(h_gmem_C_ref.data()),
-        alpha, beta);
-    
-    float max_error = 0.0f;
-    for (int i = 0; i < gmem_size_C; ++i) {
-        float diff = abs(float(h_gmem_C[i]) - float(h_gmem_C_ref[i]));
-        max_error = max(max_error, diff);
-    }
-
-    printf("Max error: %f\n", max_error);
-    if (max_error < 2e-2f){
-        printf("evaluation PASSED, now benchmarking\n");
-    } else {
-        printf("evaluation FAILED\n");
-    } // 1 ULP of fp16 ~= 0.015625 at values near 16
-
-    #endif
 
     //benchmark
     #if 1
@@ -389,10 +258,11 @@ int main(int argc, char** argv){
     float avg_ms = ms / N_ITER;
     float avg_s = avg_ms / 1000;
     double tflops = (2.0*M*N*K) * 1e-12;
-    std::cout << "\n\n========= Pipelined MMA Benchmark ===============\n";
-    printf("CUTE_GEMM:     [%6.1f]TFlop/s  (%6.4f)ms\n", tflops / avg_s, avg_ms);   //17.0 TFLOPS on T4, no async cp, same as sync kernel
+    std::cout << "\n\n========= Tiled MMA Benchmark ===============\n";
+    printf("CUTE_GEMM:     [%6.1f]TFlop/s  (%6.4f)ms\n", tflops / avg_s, avg_ms);   //10.7 TFLOPS w/o swizzle, 17.1 with swizzle
 
     #endif
+
 
     return 0;
 }

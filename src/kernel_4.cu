@@ -20,7 +20,8 @@ template <class TABC, class glayoutA, class glayoutB, class glayoutC,
 __global__ static
 __launch_bounds__(decltype(size(TiledCopyGS{}))::value)
 void tiled_mma_kernel(
-    TABC* A, TABC* B, TABC* C, TABC alpha, TABC beta,
+    const TABC* __restrict__ A, const TABC* __restrict__ B, TABC* __restrict__ C,
+    TABC alpha, TABC beta,
     glayoutA gl_A, glayoutB gl_B, glayoutC gl_C,
     CTAtiler cta_tiler, slayoutA sl_A, slayoutB sl_B,
     TiledCopyGS copy_gs, TiledCopySRA copy_sr_A, TiledCopySRB copy_sr_B, TiledMMA mma
@@ -72,7 +73,7 @@ void tiled_mma_kernel(
     __syncthreads();
     
     //main loop
-    int k_tile_num = size<3>(thr_gs_gA);
+    auto k_tile_num = size<3>(thr_gs_gA);
 
     CUTE_UNROLL
     for(int i=1; i<k_tile_num; ++i){
@@ -306,7 +307,7 @@ int main(int argc, char** argv){
     double total_flops = 2.0 * M * N * K;
     double gflops_per_sec = (total_flops) / (avg_time_ms * 1.0e6);
     times.clear();
-    std::cout << "kernel_3: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
+    std::cout << "kernel_4: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
     #endif
 
     return 0;
