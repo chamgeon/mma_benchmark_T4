@@ -202,6 +202,12 @@ int main(int argc, char** argv){
     auto const gmem_layout_B = make_layout(gmem_shape_B,gmem_stride_B);
     auto const gmem_layout_C = make_layout(gmem_shape_C,gmem_stride_C);
     
+    auto swizzle_atom = composition(Swizzle<3,3,3>{},
+                                  Layout<Shape <_8,Shape <_8, _8>>,
+                                         Stride<_8,Stride<_1,_64>>>{});
+    auto smem_layout_A = tile_to_shape(swizzle_atom, make_shape(shape_bM, shape_bK));
+    auto smem_layout_B = tile_to_shape(swizzle_atom, make_shape(shape_bN, shape_bK));
+    /*
     auto const smem_shape_A = make_shape(shape_bM, shape_bK);
     auto const smem_shape_B = make_shape(shape_bN, shape_bK);
     auto const smem_stride_A = make_stride(shape_bK, Int<1>{});   //K major
@@ -214,7 +220,7 @@ int main(int argc, char** argv){
     auto const smem_layout_B = composition(
         swizzle,
         make_layout(smem_shape_B, smem_stride_B)
-    );
+    );*/
     auto const cta_tiler = make_shape(shape_bM, shape_bN, shape_bK);
 
     auto const copy_gs_thread_shape = make_shape(Int<32>{}, Int<8>{});
