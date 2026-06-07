@@ -46,10 +46,16 @@ void tiled_mma_kernel(
     Tensor gB = local_tile(tensor_B, cta_tiler, cta_coord, Step<X, _1,_1>{});   // (bN, bK, k)
     Tensor gC = local_tile(tensor_C, cta_tiler, cta_coord, Step<_1, _1,X>{});   // (bM, bN)
 
+    extern __shared__ char shared_memory[];
+    using SharedStorage = SharedStorage<TABC, TABC, slayoutA, slayoutB>;
+    SharedStorage& smem = *reinterpret_cast<SharedStorage*>(shared_memory);
+    Tensor sA = make_tensor(make_smem_ptr(smem.A.begin()), sl_A);   // (bM, bK)
+    Tensor sB = make_tensor(make_smem_ptr(smem.B.begin()), sl_B);   // (bN, bK)
+    /*
     __shared__ TABC smemA[cosize_v<slayoutA>];
     __shared__ TABC smemB[cosize_v<slayoutB>];
     Tensor sA = make_tensor(make_smem_ptr(smemA), sl_A);   // (bM, bK)
-    Tensor sB = make_tensor(make_smem_ptr(smemB), sl_B);   // (bN, bK)
+    Tensor sB = make_tensor(make_smem_ptr(smemB), sl_B);   // (bN, bK)*/
 
     ThrCopy thr_copy_gs = copy_gs.get_thread_slice(threadIdx.x);
     Tensor thr_gs_gA = thr_copy_gs.partition_S(gA);   // (copy gs atom val, block-tile layout, k)
