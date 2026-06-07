@@ -13,6 +13,16 @@
 #include <thrust/device_vector.h>
 #include <cute/tensor.hpp>
 
+template <class ElementA,
+          class ElementB,
+          class SmemLayoutA,
+          class SmemLayoutB>
+struct SharedStorage
+{
+  cute::ArrayEngine<ElementA, cute::cosize_v<SmemLayoutA>> A;
+  cute::ArrayEngine<ElementB, cute::cosize_v<SmemLayoutB>> B;
+};
+
 
 template <class TABC, class glayoutA, class glayoutB, class glayoutC,
           class CTAtiler, class slayoutA, class slayoutB,
@@ -241,6 +251,33 @@ int main(int argc, char** argv){
     dim3 gridDim(size(ceil_div(shape_M, shape_bM)), size(ceil_div(shape_N, shape_bN)));
     dim3 blockDim(size(copy_gs_thread_layout));
 
+    //kernel launch
+    int smem_size = int(sizeof(SharedStorage<TABC, TABC, decltype(smem_layout_A), decltype(smem_layout_B)>));
+
+    auto kernel_fptr = tiled_mma_kernel<
+        TABC,
+        decltype(gmem_layout_A), decltype(gmem_layout_B), decltype(gmem_layout_C),
+        decltype(cta_tiler), decltype(smem_layout_A), decltype(smem_layout_B),
+        decltype(copy_gs), decltype(copy_sr_A), decltype(copy_sr_B), decltype(mma)>;
+
+    // Set L1 to be SMEM only
+    cudaFuncSetAttribute(
+        kernel_fptr,
+        cudaFuncAttributeMaxDynamicSharedMemorySize, smem_size);
+    cudaFuncSetAttribute(
+        kernel_fptr,
+        cudaFuncAttributePreferredSharedMemoryCarveout, 100);
+
+    auto run_gemm = [&]() {
+        kernel_fptr<<<gridDim, blockDim, smem_size>>>(
+            d_gmem_A.data().get(), d_gmem_B.data().get(), d_gmem_C.data().get(), 
+            alpha, beta,
+            gmem_layout_A, gmem_layout_B, gmem_layout_C,
+            cta_tiler, smem_layout_A, smem_layout_B,
+            copy_gs, copy_sr_A, copy_sr_B, mma
+        );
+    }
+    /*
     auto run_gemm = [&]() {
         tiled_mma_kernel<<<gridDim, blockDim>>>(
             d_gmem_A.data().get(), d_gmem_B.data().get(), d_gmem_C.data().get(), 
@@ -249,7 +286,7 @@ int main(int argc, char** argv){
             cta_tiler, smem_layout_A, smem_layout_B,
             copy_gs, copy_sr_A, copy_sr_B, mma
         );
-    };
+    };*/
 
 
     //correctness
