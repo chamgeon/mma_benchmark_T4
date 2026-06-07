@@ -276,7 +276,7 @@ int main(int argc, char** argv){
             cta_tiler, smem_layout_A, smem_layout_B,
             copy_gs, copy_sr_A, copy_sr_B, mma
         );
-    }
+    };
     /*
     auto run_gemm = [&]() {
         tiled_mma_kernel<<<gridDim, blockDim>>>(
