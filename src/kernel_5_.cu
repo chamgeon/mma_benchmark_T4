@@ -31,7 +31,7 @@ void tiled_mma_kernel(
     Tensor tensor_B = make_tensor(make_gmem_ptr(B), gl_B);
     Tensor tensor_C = make_tensor(make_gmem_ptr(C), gl_C);
 
-    auto const cta_coord = make_coord(blockIdx.y, blockIdx.x, _);
+    auto const cta_coord = make_coord(blockIdx.x, blockIdx.y, _);
     Tensor gA = local_tile(tensor_A, cta_tiler, cta_coord, Step<_1, X,_1>{});   // (bM, bK, k)
     Tensor gB = local_tile(tensor_B, cta_tiler, cta_coord, Step<X, _1,_1>{});   // (bN, bK, k)
     Tensor gC = local_tile(tensor_C, cta_tiler, cta_coord, Step<_1, _1,X>{});   // (bM, bN)
@@ -158,8 +158,8 @@ int main(int argc, char** argv){
     //constexpr int M{512};
     //constexpr int N{512};
     //constexpr int K{256};
-    constexpr int bM{256};
-    constexpr int bN{128};
+    constexpr int bM{128};
+    constexpr int bN{256};
     constexpr int bK{64};
     
     constexpr int gmem_size_A = M*K;
