@@ -158,8 +158,8 @@ int main(int argc, char** argv){
     //constexpr int M{512};
     //constexpr int N{512};
     //constexpr int K{256};
-    constexpr int bM{256};
-    constexpr int bN{128};
+    constexpr int bM{128};
+    constexpr int bN{256};
     constexpr int bK{64};
     
     constexpr int gmem_size_A = M*K;
@@ -223,7 +223,7 @@ int main(int argc, char** argv){
     auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});
     auto const copy_gs_val_layout = make_layout(copy_gs_val_shape);
 
-    auto const mma_warps_shape = make_shape(Int<4>{}, Int<2>{}, Int<1>{});   ///2x2x1 atoms per cta
+    auto const mma_warps_shape = make_shape(Int<4>{}, Int<2>{}, Int<1>{});   ///4x2x1 atoms per cta
     auto const mma_warps_layout = make_layout(mma_warps_shape);
     auto const mma_tile = make_tile(Int<64>{}, Int<32>{}, Int<8>{});
 
