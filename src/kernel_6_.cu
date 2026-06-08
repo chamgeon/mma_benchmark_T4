@@ -75,6 +75,7 @@ void tiled_mma_kernel(
     copy(copy_sr_A, thr_sr_sA(_,_,0), thr_sr_rA(_,_,0));
     copy(copy_sr_B, thr_sr_sB(_,_,0), thr_sr_rB(_,_,0));
 
+
     //main loop
     auto K_TILE_MAX = size<3>(thr_gs_gA);
     auto K_BLOCK_MAX = size<2>(thr_mma_rA);
@@ -152,7 +153,7 @@ int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopy<uint128_t>;
-    using CopyOP_SR = SM75_U32x4_LDSM_N;
+    using CopyOP_SR = SM75_U32x2_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
     constexpr int M{8192};
@@ -229,7 +230,7 @@ int main(int argc, char** argv){
 
     auto const mma_warps_shape = make_shape(Int<2>{}, Int<4>{}, Int<1>{});   ///4x2x1 atoms per cta
     auto const mma_warps_layout = make_layout(mma_warps_shape);
-    auto const mma_tile = make_tile(Int<64>{}, Int<128>{}, Int<8>{});
+    auto const mma_tile = make_tile(Int<32>{}, Int<64>{}, Int<8>{});
 
     //atom, tiledcopy, tiledmma, dims
 
@@ -284,11 +285,13 @@ int main(int argc, char** argv){
 
     #endif
 
+
+    //warmup
     run_gemm();
     cudaDeviceSynchronize();
 
     #if 1
-    //benchmark
+    //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
