@@ -222,8 +222,8 @@ int main(int argc, char** argv){
     );
     auto const cta_tiler = make_shape(shape_bM, shape_bN, shape_bK);
 
-    auto const copy_gs_thread_shape = make_shape(Int<32>{}, Int<8>{});
-    auto const copy_gs_thread_stride = make_stride(Int<8>{}, Int<1>{});
+    auto const copy_gs_thread_shape = make_shape(Int<64>{}, Int<4>{});
+    auto const copy_gs_thread_stride = make_stride(Int<4>{}, Int<1>{});
     auto const copy_gs_thread_layout = make_layout(copy_gs_thread_shape, copy_gs_thread_stride);
     auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});
     auto const copy_gs_val_layout = make_layout(copy_gs_val_shape);
