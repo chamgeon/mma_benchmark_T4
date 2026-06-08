@@ -50,8 +50,10 @@ void tiled_mma_kernel(
     Tensor thr_gs_rB = make_fragment_like(thr_gs_sB);
 
     //prefetch
+    #if 0
     copy(copy_gs, thr_gs_gA(_,_,_,0), thr_gs_rA);
     copy(copy_gs, thr_gs_gB(_,_,_,0), thr_gs_rB);
+    #endif
 
     ThrMMA thr_mma = mma.get_thread_slice(threadIdx.x);
     Tensor thr_mma_rA = thr_mma.partition_fragment_A(sA);   // (mma atom val A, block-cta layout A)
@@ -67,6 +69,65 @@ void tiled_mma_kernel(
     Tensor thr_sr_rB = thr_copy_sr_B.retile_D(thr_mma_rB);   // (copy sr atom val, block-cta layout)
 
     clear(thr_mma_rC);
+
+    #if 1
+    if(thread0()){
+        print("  tensor_A : "); print(tensor_A); print("\n");
+        print("  tensor_B : "); print(tensor_B); print("\n");
+        print("  tensor_C : "); print(tensor_C); print("\n\n");
+
+        print("  gA : "); print(gA); print("\n");
+        print("  gB : "); print(gB); print("\n");
+        print("  gC : "); print(gC); print("\n\n");
+        print("  sA : "); print(sA); print("\n");
+        print("  sB : "); print(sB); print("\n\n");
+
+        print("  thr_gs_gA : "); print(thr_gs_gA); print("\n");
+        print("  thr_gs_gB : "); print(thr_gs_gB); print("\n");
+        print("  thr_gs_sA : "); print(thr_gs_sA); print("\n");
+        print("  thr_gs_sB : "); print(thr_gs_sB); print("\n\n");
+
+        print(copy_gs); print("\n\n");
+
+        auto tidfrg_S_gmem_A = copy_gs.tidfrg_S(gA.layout());
+        auto tidfrg_D_smem_A = copy_gs.tidfrg_D(sA.layout());
+        auto tidfrg_S_gmem_B = copy_gs.tidfrg_S(gB.layout());
+        auto tidfrg_D_smem_B = copy_gs.tidfrg_D(sB.layout());
+
+        print("  thrfrg_G_A : "); print(tidfrg_S_gmem_A); print("\n");
+        print("  thrfrg_S_A : "); print(tidfrg_D_smem_A); print("\n");
+        print("  thrfrg_G_B : "); print(tidfrg_S_gmem_B); print("\n");
+        print("  thrfrg_S_B : "); print(tidfrg_D_smem_B); print("\n\n");
+
+        auto thr_thrfrg_A = mma.thrfrg_A(sA.layout());
+        auto thr_thrfrg_B = mma.thrfrg_B(sB.layout());
+        auto thr_thrfrg_C = mma.thrfrg_C(gC.layout());
+
+        print("  thrfrg_A : "); print(thr_thrfrg_A); print("\n");
+        print("  thrfrg_B : "); print(thr_thrfrg_B); print("\n");
+        print("  thrfrg_C : "); print(thr_thrfrg_C); print("\n\n");
+
+        print("  thr_mma_rA : "); print(thr_mma_rA); print("\n");
+        print("  thr_mma_rB : "); print(thr_mma_rB); print("\n");
+        print("  thr_mma_rC : "); print(thr_mma_rC); print("\n\n");
+
+        auto tidfrg_S_A = copy_sr_A.tidfrg_S(sA.layout());
+        auto tidfrg_S_B = copy_sr_B.tidfrg_S(sB.layout());
+
+        print("  tidfrg_S_A : "); print(tidfrg_S_A); print("\n");
+        print("  thrfrg_S_B : "); print(tidfrg_S_B); print("\n\n");
+
+        print("  thr_sr_sA : "); print(thr_sr_sA); print("\n");
+        print("  thr_sr_sB : "); print(thr_sr_sB); print("\n");
+        print("  thr_sr_rA : "); print(thr_sr_rA); print("\n");
+        print("  thr_sr_rB : "); print(thr_sr_rB); print("\n\n");
+
+        print(copy_sr_A); print("\n");
+        print(copy_sr_B); print("\n\n");
+    }
+    #endif
+
+    #if 0
 
     copy(thr_gs_rA, thr_gs_sA);
     copy(thr_gs_rB, thr_gs_sB);
@@ -105,6 +166,7 @@ void tiled_mma_kernel(
         }
     }
     axpby(alpha, thr_mma_rC, beta, thr_mma_gC);
+    #endif
 }
 
 
@@ -153,7 +215,7 @@ int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopy<uint128_t>;
-    using CopyOP_SR = SM75_U32x2_LDSM_N;
+    using CopyOP_SR = SM75_U32x4_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
     constexpr int M{8192};
@@ -165,7 +227,7 @@ int main(int argc, char** argv){
     //constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{256};
-    constexpr int bK{32};
+    constexpr int bK{64};
     
     constexpr int gmem_size_A = M*K;
     constexpr int gmem_size_B = N*K;
@@ -222,15 +284,15 @@ int main(int argc, char** argv){
     );
     auto const cta_tiler = make_shape(shape_bM, shape_bN, shape_bK);
 
-    auto const copy_gs_thread_shape = make_shape(Int<64>{}, Int<4>{});
-    auto const copy_gs_thread_stride = make_stride(Int<4>{}, Int<1>{});
+    auto const copy_gs_thread_shape = make_shape(Int<32>{}, Int<8>{});
+    auto const copy_gs_thread_stride = make_stride(Int<8>{}, Int<1>{});
     auto const copy_gs_thread_layout = make_layout(copy_gs_thread_shape, copy_gs_thread_stride);
     auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});
     auto const copy_gs_val_layout = make_layout(copy_gs_val_shape);
 
-    auto const mma_warps_shape = make_shape(Int<4>{}, Int<2>{}, Int<1>{});   ///4x2x1 atoms per cta
+    auto const mma_warps_shape = make_shape(Int<2>{}, Int<4>{}, Int<1>{});   ///4x2x1 atoms per cta
     auto const mma_warps_layout = make_layout(mma_warps_shape);
-    auto const mma_tile = make_tile(Int<64>{}, Int<32>{}, Int<8>{});
+    auto const mma_tile = make_tile(Int<64>{}, Int<128>{}, Int<8>{});
 
     //atom, tiledcopy, tiledmma, dims
 
@@ -290,7 +352,7 @@ int main(int argc, char** argv){
     run_gemm();
     cudaDeviceSynchronize();
 
-    #if 1
+    #if 0
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;
