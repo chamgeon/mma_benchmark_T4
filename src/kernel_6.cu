@@ -1,4 +1,4 @@
-//ldsm pipelining
+//ldsm pipelining + mma tile size opt (less ldsm)
 
 #include <cstdlib>
 #include <cstdio>
@@ -228,9 +228,9 @@ int main(int argc, char** argv){
     auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});
     auto const copy_gs_val_layout = make_layout(copy_gs_val_shape);
 
-    auto const mma_warps_shape = make_shape(Int<4>{}, Int<2>{}, Int<1>{});   ///4x2x1 atoms per cta
+    auto const mma_warps_shape = make_shape(Int<2>{}, Int<4>{}, Int<1>{});   ///2x4x1 atoms per cta
     auto const mma_warps_layout = make_layout(mma_warps_shape);
-    auto const mma_tile = make_tile(Int<64>{}, Int<32>{}, Int<8>{});
+    auto const mma_tile = make_tile(Int<32>{}, Int<64>{}, Int<8>{});
 
     //atom, tiledcopy, tiledmma, dims
 
