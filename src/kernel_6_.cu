@@ -34,7 +34,7 @@ struct UniversalCopyCacheGlobal
         uint32_t*       dst_ptr = reinterpret_cast<uint32_t*>(&dst);
 
         asm volatile(
-        "ld.global.cg.L2::128B.v4.b32 {%0, %1, %2, %3}, [%4];\n"
+        "ld.global.nc.cg.L2::128B.v4.b32 {%0, %1, %2, %3}, [%4];\n"
         : "=r"(dst_ptr[0]), "=r"(dst_ptr[1]), "=r"(dst_ptr[2]), "=r"(dst_ptr[3])
         : "l"(src_ptr)
         );
@@ -270,7 +270,7 @@ int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS_A = UniversalCopyCacheGlobal<uint128_t>;
-    using CopyOP_GS_B = UniversalCopyCacheStream<uint128_t>;
+    using CopyOP_GS_B = UniversalCopyCacheGlobal<uint128_t>;
     using CopyOP_SR = SM75_U32x2_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
