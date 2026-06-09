@@ -62,7 +62,7 @@ struct UniversalCopyCacheStream
         uint32_t*       dst_ptr = reinterpret_cast<uint32_t*>(&dst);
 
         asm volatile(
-        "ld.global.L1::no_allocate.L2::no_allocate.v4.b32 {%0, %1, %2, %3}, [%4];\n"
+        "ld.global.cv.v4.b32 {%0, %1, %2, %3}, [%4];\n"
         : "=r"(dst_ptr[0]), "=r"(dst_ptr[1]), "=r"(dst_ptr[2]), "=r"(dst_ptr[3])
         : "l"(src_ptr)
         );
