@@ -1,4 +1,4 @@
-//ldsm pipelining
+//custom copy atom
 
 #include <cstdlib>
 #include <cstdio>
@@ -15,7 +15,6 @@
 
 namespace cute
 {
-
 template <class S, class D = S>
 struct UniversalCopyCacheGlobal
 {
@@ -34,63 +33,7 @@ struct UniversalCopyCacheGlobal
         uint32_t*       dst_ptr = reinterpret_cast<uint32_t*>(&dst);
 
         asm volatile(
-        "ld.global.nc.cg.L2::128B.v4.b32 {%0, %1, %2, %3}, [%4];\n"
-        : "=r"(dst_ptr[0]), "=r"(dst_ptr[1]), "=r"(dst_ptr[2]), "=r"(dst_ptr[3])
-        : "l"(src_ptr)
-        );
-    #else
-        dst = src;
-    #endif
-    }
-};
-
-template <class S, class D = S>
-struct UniversalCopyCacheStream
-{
-    using SRegisters = S[1];
-    using DRegisters = D[1];
-
-    static_assert(sizeof_bits_v<S> == 128, "S must be 128 bits for 128B vectorized copy");
-    static_assert(sizeof_bits_v<D> == 128, "D must be 128 bits for 128B vectorized copy");
-
-    CUTE_HOST_DEVICE static void
-    copy(S const& src,
-         D      & dst)
-    {
-    #if defined(__CUDA_ARCH__)
-        uint32_t const* src_ptr = reinterpret_cast<uint32_t const*>(&src);
-        uint32_t*       dst_ptr = reinterpret_cast<uint32_t*>(&dst);
-
-        asm volatile(
-        "ld.global.cv.v4.b32 {%0, %1, %2, %3}, [%4];\n"
-        : "=r"(dst_ptr[0]), "=r"(dst_ptr[1]), "=r"(dst_ptr[2]), "=r"(dst_ptr[3])
-        : "l"(src_ptr)
-        );
-    #else
-        dst = src;
-    #endif
-    }
-};
-
-template <class S, class D = S>
-struct UniversalCopyNoCache
-{
-    using SRegisters = S[1];
-    using DRegisters = D[1];
-
-    static_assert(sizeof_bits_v<S> == 128, "S must be 128 bits for 128B vectorized copy");
-    static_assert(sizeof_bits_v<D> == 128, "D must be 128 bits for 128B vectorized copy");
-
-    CUTE_HOST_DEVICE static void
-    copy(S const& src,
-         D      & dst)
-    {
-    #if defined(__CUDA_ARCH__)
-        uint32_t const* src_ptr = reinterpret_cast<uint32_t const*>(&src);
-        uint32_t*       dst_ptr = reinterpret_cast<uint32_t*>(&dst);
-
-        asm volatile(
-        "ld.global.cv.v4.b32 {%0, %1, %2, %3}, [%4];\n"
+        "ld.global.nc.L2::128B.v4.b32 {%0, %1, %2, %3}, [%4];\n"
         : "=r"(dst_ptr[0]), "=r"(dst_ptr[1]), "=r"(dst_ptr[2]), "=r"(dst_ptr[3])
         : "l"(src_ptr)
         );
@@ -109,38 +52,19 @@ struct Copy_Traits<UniversalCopyCacheGlobal<S,D>>
   using RefLayout = SrcLayout;
 };
 
-template <class S, class D>
-struct Copy_Traits<UniversalCopyCacheStream<S,D>>
-{
-  using ThrID = Layout<_1>;
-  using SrcLayout = Layout<Shape<_1,Int<sizeof_bits<S>::value>>>;
-  using DstLayout = Layout<Shape<_1,Int<sizeof_bits<D>::value>>>;
-  using RefLayout = SrcLayout;
-};
-
-template <class S, class D>
-struct Copy_Traits<UniversalCopyNoCache<S,D>>
-{
-  using ThrID = Layout<_1>;
-  using SrcLayout = Layout<Shape<_1,Int<sizeof_bits<S>::value>>>;
-  using DstLayout = Layout<Shape<_1,Int<sizeof_bits<D>::value>>>;
-  using RefLayout = SrcLayout;
-};
-
 }
-
 
 template <class TABC, class glayoutA, class glayoutB, class glayoutC,
           class CTAtiler, class slayoutA, class slayoutB,
-          class TiledCopyGSA, class TiledCopyGSB, class TiledCopySRA, class TiledCopySRB, class TiledMMA>
+          class TiledCopyGS, class TiledCopySRA, class TiledCopySRB, class TiledMMA>
 __global__ static
-__launch_bounds__(decltype(size(TiledCopyGSA{}))::value)
+__launch_bounds__(decltype(size(TiledCopyGS{}))::value)
 void tiled_mma_kernel(
     const TABC* __restrict__ A, const TABC* __restrict__ B, TABC* __restrict__ C,
     TABC alpha, TABC beta,
     glayoutA gl_A, glayoutB gl_B, glayoutC gl_C,
     CTAtiler cta_tiler, slayoutA sl_A, slayoutB sl_B,
-    TiledCopyGSA copy_gs_A, TiledCopyGSB copy_gs_B, TiledCopySRA copy_sr_A, TiledCopySRB copy_sr_B, TiledMMA mma
+    TiledCopyGS copy_gs, TiledCopySRA copy_sr_A, TiledCopySRB copy_sr_B, TiledMMA mma
 ) {
     using namespace cute;
     Tensor tensor_A = make_tensor(make_gmem_ptr(A), gl_A);
@@ -157,18 +81,17 @@ void tiled_mma_kernel(
     Tensor sA = make_tensor(make_smem_ptr(smemA), sl_A);   // (bM, bK)
     Tensor sB = make_tensor(make_smem_ptr(smemB), sl_B);   // (bN, bK)
 
-    ThrCopy thr_copy_gs_A = copy_gs_A.get_thread_slice(threadIdx.x);
-    ThrCopy thr_copy_gs_B = copy_gs_B.get_thread_slice(threadIdx.x);
-    Tensor thr_gs_gA = thr_copy_gs_A.partition_S(gA);   // (copy gs atom val, block-tile layout, k)
-    Tensor thr_gs_gB = thr_copy_gs_B.partition_S(gB);   // (copy gs atom val, block-tile layout, k)
-    Tensor thr_gs_sA = thr_copy_gs_A.partition_D(sA);   // (copy gs atom val, block-tile layout)
-    Tensor thr_gs_sB = thr_copy_gs_B.partition_D(sB);   // (copy gs atom val, block-tile layout)
+    ThrCopy thr_copy_gs = copy_gs.get_thread_slice(threadIdx.x);
+    Tensor thr_gs_gA = thr_copy_gs.partition_S(gA);   // (copy gs atom val, block-tile layout, k)
+    Tensor thr_gs_gB = thr_copy_gs.partition_S(gB);   // (copy gs atom val, block-tile layout, k)
+    Tensor thr_gs_sA = thr_copy_gs.partition_D(sA);   // (copy gs atom val, block-tile layout)
+    Tensor thr_gs_sB = thr_copy_gs.partition_D(sB);   // (copy gs atom val, block-tile layout)
     Tensor thr_gs_rA = make_fragment_like(thr_gs_sA);
     Tensor thr_gs_rB = make_fragment_like(thr_gs_sB);
 
     //prefetch
-    copy(copy_gs_A, thr_gs_gA(_,_,_,0), thr_gs_rA);
-    copy(copy_gs_B, thr_gs_gB(_,_,_,0), thr_gs_rB);
+    copy(copy_gs, thr_gs_gA(_,_,_,0), thr_gs_rA);
+    copy(copy_gs, thr_gs_gB(_,_,_,0), thr_gs_rB);
 
     ThrMMA thr_mma = mma.get_thread_slice(threadIdx.x);
     Tensor thr_mma_rA = thr_mma.partition_fragment_A(sA);   // (mma atom val A, block-cta layout A)
@@ -214,8 +137,8 @@ void tiled_mma_kernel(
 
             if(k_block_cur == 0){
                 int k_tile_next = (k_tile_cur + 1 < K_TILE_MAX) ? k_tile_cur + 1 : k_tile_cur;
-                copy(copy_gs_A, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
-                copy(copy_gs_B, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
+                copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
+                copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
             }
 
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
@@ -269,8 +192,7 @@ void gemm_cpu_reference(
 int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
-    using CopyOP_GS_A = UniversalCopyCacheGlobal<uint128_t>;
-    using CopyOP_GS_B = UniversalCopyCacheGlobal<uint128_t>;
+    using CopyOP_GS = UniversalCopyCacheGlobal<uint128_t>;
     using CopyOP_SR = SM75_U32x2_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
@@ -346,19 +268,17 @@ int main(int argc, char** argv){
     auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});
     auto const copy_gs_val_layout = make_layout(copy_gs_val_shape);
 
-    auto const mma_warps_shape = make_shape(Int<4>{}, Int<2>{}, Int<1>{});   ///4x2x1 atoms per cta
+    auto const mma_warps_shape = make_shape(Int<2>{}, Int<4>{}, Int<1>{});   ///2x4x1 atoms per cta
     auto const mma_warps_layout = make_layout(mma_warps_shape);
-    auto const mma_tile = make_tile(Int<64>{}, Int<32>{}, Int<8>{});
+    auto const mma_tile = make_tile(Int<32>{}, Int<64>{}, Int<8>{});
 
     //atom, tiledcopy, tiledmma, dims
 
-    Copy_Atom<CopyOP_GS_A, TABC> copy_atom_gs_A;
-    Copy_Atom<CopyOP_GS_B, TABC> copy_atom_gs_B;
+    Copy_Atom<CopyOP_GS, TABC> copy_atom_gs;
     Copy_Atom<CopyOP_SR, TABC> copy_atom_sr;
     MMA_Atom<MMAOP> mma_atom;
 
-    auto const copy_gs_A = make_tiled_copy(copy_atom_gs_A, copy_gs_thread_layout, copy_gs_val_layout);
-    auto const copy_gs_B = make_tiled_copy(copy_atom_gs_B, copy_gs_thread_layout, copy_gs_val_layout);
+    auto const copy_gs = make_tiled_copy(copy_atom_gs, copy_gs_thread_layout, copy_gs_val_layout);
     auto const mma = make_tiled_mma(mma_atom, mma_warps_layout, mma_tile);
     auto const copy_sr_A = make_tiled_copy_A(copy_atom_sr, mma);
     auto const copy_sr_B = make_tiled_copy_B(copy_atom_sr, mma);
@@ -372,7 +292,7 @@ int main(int argc, char** argv){
             alpha, beta,
             gmem_layout_A, gmem_layout_B, gmem_layout_C,
             cta_tiler, smem_layout_A, smem_layout_B,
-            copy_gs_A, copy_gs_B, copy_sr_A, copy_sr_B, mma
+            copy_gs, copy_sr_A, copy_sr_B, mma
         );
     };
 
