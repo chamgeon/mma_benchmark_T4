@@ -46,8 +46,8 @@ void tiled_mma_kernel(
     Tensor thr_gs_gB = thr_copy_gs.partition_S(gB);   // (copy gs atom val, block-tile layout, k)
     Tensor thr_gs_sA = thr_copy_gs.partition_D(sA);   // (copy gs atom val, block-tile layout)
     Tensor thr_gs_sB = thr_copy_gs.partition_D(sB);   // (copy gs atom val, block-tile layout)
-    Tensor thr_gs_rA = make_fragment_like(thr_gs_sA);
-    Tensor thr_gs_rB = make_fragment_like(thr_gs_sB);
+    Tensor thr_gs_rA = make_fragment_like(thr_gs_sA(_,_,_,0));
+    Tensor thr_gs_rB = make_fragment_like(thr_gs_sB(_,_,_,0));
 
     //prefetch
     auto K_PIPE_MAX = size<2>(sA);   //bP
@@ -57,10 +57,13 @@ void tiled_mma_kernel(
 
     CUTE_UNROLL
     for(int i=0; i<K_PIPE_MAX-1; ++i){
-        copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA(_,_,_,i));
-        copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB(_,_,_,i));
+        copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
+        copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
         --k_tile_count;
         if(k_tile_count>0){++k_tile_next;}
+
+        copy(thr_gs_rA, thr_gs_sA(_,_,_,i));
+        copy(thr_gs_rB, thr_gs_sB(_,_,_,i));
     }
 
     ThrMMA thr_mma = mma.get_thread_slice(threadIdx.x);
@@ -78,13 +81,6 @@ void tiled_mma_kernel(
 
     clear(thr_mma_rC);
 
-    CUTE_UNROLL
-    for(int i=0; i<K_PIPE_MAX-1; ++i){
-        copy(thr_gs_rA(_,_,_,i), thr_gs_sA(_,_,_,i));
-        copy(thr_gs_rB(_,_,_,i), thr_gs_sB(_,_,_,i));
-        __syncthreads();
-    }
-
     int k_tile_read = 0;
     int k_tile_write = K_PIPE_MAX-1;
     auto thr_sr_sA_P = thr_sr_sA(_,_,_,k_tile_read);
@@ -93,6 +89,7 @@ void tiled_mma_kernel(
     auto K_BLOCK_MAX = size<2>(thr_mma_rA);
 
     if(K_BLOCK_MAX>1){
+        __syncthreads();
         copy(copy_sr_A, thr_sr_sA_P(_,_,Int<0>{}), thr_sr_rA(_,_,Int<0>{}));
         copy(copy_sr_B, thr_sr_sB_P(_,_,Int<0>{}), thr_sr_rB(_,_,Int<0>{}));
     }
@@ -105,8 +102,8 @@ void tiled_mma_kernel(
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
             if(k_block_cur == K_BLOCK_MAX-1){
-                copy(thr_gs_rA(_,_,_,k_tile_write), thr_gs_sA(_,_,_,k_tile_write));
-                copy(thr_gs_rB(_,_,_,k_tile_write), thr_gs_sB(_,_,_,k_tile_write));
+                copy(thr_gs_rA, thr_gs_sA(_,_,_,k_tile_write));
+                copy(thr_gs_rB, thr_gs_sB(_,_,_,k_tile_write));
                 k_tile_write = k_tile_read;
                 k_tile_read = (k_tile_read == K_PIPE_MAX-1)? 0 : k_tile_read+1;
                 __syncthreads();
@@ -121,12 +118,13 @@ void tiled_mma_kernel(
 
             if(k_block_cur == 0){
                 if(k_tile_count>0){
-                    copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA(_,_,_,k_tile_write));
-                    copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB(_,_,_,k_tile_write));
+                    copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
+                    copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
                 }
                 --k_tile_count;
                 if(k_tile_count>0){++k_tile_next;}
             }
+            
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
     }
