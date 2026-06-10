@@ -93,8 +93,8 @@ void tiled_mma_kernel(
     //prefetch
     copy(copy_gs, thr_gs_gA(_,_,_,Int<0>{}), thr_gs_rA);
     copy(copy_gs, thr_gs_gB(_,_,_,Int<0>{}), thr_gs_rB);
-    copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<0>{}));
-    copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<0>{}));
+    copy(copy_gs, thr_gs_rA, thr_gs_sA(_,_,_,Int<0>{}));
+    copy(copy_gs, thr_gs_rB, thr_gs_sB(_,_,_,Int<0>{}));
 
     ThrMMA thr_mma = mma.get_thread_slice(threadIdx.x);
     Tensor thr_mma_rA = thr_mma.partition_fragment_A(sA(_,_,0));   // (mma atom val A, block-cta layout A)
@@ -128,8 +128,8 @@ void tiled_mma_kernel(
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
             if(k_block_cur == K_BLOCK_MAX-1){
-                copy(thr_gs_rA, thr_gs_sA(_,_,_,1));
-                copy(thr_gs_rB, thr_gs_sB(_,_,_,1));
+                copy(copy_gs, thr_gs_rA, thr_gs_sA(_,_,_,1));
+                copy(copy_gs, thr_gs_rB, thr_gs_sB(_,_,_,1));
                 __syncthreads();
 
                 thr_sr_sA_P = thr_sr_sA(_,_,_,1);
@@ -152,8 +152,8 @@ void tiled_mma_kernel(
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
             if(k_block_cur == K_BLOCK_MAX-1){
-                copy(thr_gs_rA, thr_gs_sA(_,_,_,0));
-                copy(thr_gs_rB, thr_gs_sB(_,_,_,0));
+                copy(copy_gs, thr_gs_rA, thr_gs_sA(_,_,_,0));
+                copy(copy_gs, thr_gs_rB, thr_gs_sB(_,_,_,0));
                 __syncthreads();
 
                 thr_sr_sA_P = thr_sr_sA(_,_,_,0);
