@@ -14,6 +14,47 @@
 #include <cute/tensor.hpp>
 
 
+namespace cute
+{
+template <class S, class D = S>
+struct UniversalCopyCacheGlobal
+{
+    using SRegisters = S[1];
+    using DRegisters = D[1];
+
+    static_assert(sizeof_bits_v<S> == 128, "S must be 128 bits for 128B vectorized copy");
+    static_assert(sizeof_bits_v<D> == 128, "D must be 128 bits for 128B vectorized copy");
+
+    CUTE_HOST_DEVICE static void
+    copy(S const& src,
+         D      & dst)
+    {
+    #if defined(__CUDA_ARCH__)
+        uint32_t const* src_ptr = reinterpret_cast<uint32_t const*>(&src);
+        uint32_t*       dst_ptr = reinterpret_cast<uint32_t*>(&dst);
+
+        asm volatile(
+        "ld.global.nc.L2::128B.v4.b32 {%0, %1, %2, %3}, [%4];\n"
+        : "=r"(dst_ptr[0]), "=r"(dst_ptr[1]), "=r"(dst_ptr[2]), "=r"(dst_ptr[3])
+        : "l"(src_ptr)
+        );
+    #else
+        dst = src;
+    #endif
+    }
+};
+
+template <class S, class D>
+struct Copy_Traits<UniversalCopyCacheGlobal<S,D>>
+{
+  using ThrID = Layout<_1>;
+  using SrcLayout = Layout<Shape<_1,Int<sizeof_bits<S>::value>>>;
+  using DstLayout = Layout<Shape<_1,Int<sizeof_bits<D>::value>>>;
+  using RefLayout = SrcLayout;
+};
+
+}
+
 template <class TABC, class glayoutA, class glayoutB, class glayoutC,
           class CTAtiler, class slayoutA, class slayoutB,
           class TiledCopyGS, class TiledCopySRA, class TiledCopySRB, class TiledMMA>
@@ -124,7 +165,7 @@ void tiled_mma_kernel(
                 --k_tile_count;
                 if(k_tile_count>0){++k_tile_next;}
             }
-            
+
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
     }
@@ -177,7 +218,7 @@ void gemm_cpu_reference(
 int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
-    using CopyOP_GS = UniversalCopy<uint128_t>;
+    using CopyOP_GS = UniversalCopyCacheGlobal<uint128_t>;
     using CopyOP_SR = SM75_U32x2_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
