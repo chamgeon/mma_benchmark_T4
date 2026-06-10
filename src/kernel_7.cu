@@ -158,10 +158,8 @@ void tiled_mma_kernel(
             copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
 
             if(k_block_cur == 0){
-                if(k_tile_count>0){
-                    copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
-                    copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
-                }
+                copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
+                copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
                 --k_tile_count;
                 if(k_tile_count>0){++k_tile_next;}
             }
