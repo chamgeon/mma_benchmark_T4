@@ -91,21 +91,10 @@ void tiled_mma_kernel(
     Tensor thr_gs_rB = make_fragment_like(thr_gs_sB(_,_,_,0));
 
     //prefetch
-    auto K_PIPE_MAX = size<2>(sA);   //bP
-
-    int k_tile_next = 0;
-    int k_tile_count = size<3>(thr_gs_gA);   //k
-
-    CUTE_UNROLL
-    for(int i=0; i<K_PIPE_MAX-1; ++i){
-        copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
-        copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
-        --k_tile_count;
-        if(k_tile_count>0){++k_tile_next;}
-
-        copy(thr_gs_rA, thr_gs_sA(_,_,_,i));
-        copy(thr_gs_rB, thr_gs_sB(_,_,_,i));
-    }
+    copy(copy_gs, thr_gs_gA(_,_,_,Int<0>{}), thr_gs_rA);
+    copy(copy_gs, thr_gs_gB(_,_,_,Int<0>{}), thr_gs_rB);
+    copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<0>{}));
+    copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<0>{}));
 
     ThrMMA thr_mma = mma.get_thread_slice(threadIdx.x);
     Tensor thr_mma_rA = thr_mma.partition_fragment_A(sA(_,_,0));   // (mma atom val A, block-cta layout A)
@@ -122,35 +111,29 @@ void tiled_mma_kernel(
 
     clear(thr_mma_rC);
 
-    int k_tile_read = 0;
-    int k_tile_write = K_PIPE_MAX-1;
-    auto thr_sr_sA_P = thr_sr_sA(_,_,_,k_tile_read);
-    auto thr_sr_sB_P = thr_sr_sB(_,_,_,k_tile_read);
-
-    auto K_BLOCK_MAX = size<2>(thr_mma_rA);
-
-    if(K_BLOCK_MAX>1){
-        __syncthreads();
-        copy(copy_sr_A, thr_sr_sA_P(_,_,Int<0>{}), thr_sr_rA(_,_,Int<0>{}));
-        copy(copy_sr_B, thr_sr_sB_P(_,_,Int<0>{}), thr_sr_rB(_,_,Int<0>{}));
-    }
+    __syncthreads();
+    auto thr_sr_sA_P = thr_sr_sA(_,_,_,Int<0>{});
+    auto thr_sr_sB_P = thr_sr_sB(_,_,_,Int<0>{});
+    copy(copy_sr_A, thr_sr_sA_P(_,_,Int<0>{}), thr_sr_rA(_,_,Int<0>{}));
+    copy(copy_sr_B, thr_sr_sB_P(_,_,Int<0>{}), thr_sr_rB(_,_,Int<0>{}));
 
     //main loop
+    auto K_TILE_MAX = size<3>(thr_gs_gA);
+    auto K_BLOCK_MAX = size<2>(thr_mma_rA);
 
     CUTE_NO_UNROLL
-    while(k_tile_count>-(K_PIPE_MAX-1)){
-        CUTE_UNROLL
+    for(int k_tile = 1; k_tile<K_TILE_MAX; k_tile += 2){
+
+        CUTE_UNROLL //consume first pipe
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
             if(k_block_cur == K_BLOCK_MAX-1){
-                copy(thr_gs_rA, thr_gs_sA(_,_,_,k_tile_write));
-                copy(thr_gs_rB, thr_gs_sB(_,_,_,k_tile_write));
-                k_tile_write = k_tile_read;
-                k_tile_read = (k_tile_read == K_PIPE_MAX-1)? 0 : k_tile_read+1;
+                copy(thr_gs_rA, thr_gs_sA(_,_,_,1));
+                copy(thr_gs_rB, thr_gs_sB(_,_,_,1));
                 __syncthreads();
 
-                thr_sr_sA_P = thr_sr_sA(_,_,_,k_tile_read);
-                thr_sr_sB_P = thr_sr_sB(_,_,_,k_tile_read);
+                thr_sr_sA_P = thr_sr_sA(_,_,_,1);
+                thr_sr_sB_P = thr_sr_sB(_,_,_,1);
             }
 
             auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
@@ -158,10 +141,33 @@ void tiled_mma_kernel(
             copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
 
             if(k_block_cur == 0){
+                copy(copy_gs, thr_gs_gA(_,_,_,k_tile), thr_gs_rA);
+                copy(copy_gs, thr_gs_gB(_,_,_,k_tile), thr_gs_rB);
+            }
+
+            gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
+        }
+
+        CUTE_UNROLL //consume second pipe
+        for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
+
+            if(k_block_cur == K_BLOCK_MAX-1){
+                copy(thr_gs_rA, thr_gs_sA(_,_,_,0));
+                copy(thr_gs_rB, thr_gs_sB(_,_,_,0));
+                __syncthreads();
+
+                thr_sr_sA_P = thr_sr_sA(_,_,_,0);
+                thr_sr_sB_P = thr_sr_sB(_,_,_,0);
+            }
+
+            auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
+            copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
+            copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
+
+            if(k_block_cur == 0){
+                auto k_tile_next = (k_tile+Int<1>{})%K_TILE_MAX;
                 copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
                 copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
-                --k_tile_count;
-                if(k_tile_count>0){++k_tile_next;}
             }
 
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
@@ -379,7 +385,7 @@ int main(int argc, char** argv){
     double total_flops = 2.0 * M * N * K;
     double gflops_per_sec = (total_flops) / (avg_time_ms * 1.0e6);
     times.clear();
-    std::cout << "kernel_6: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
+    std::cout << "kernel_7: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
     #endif
 
     return 0;
