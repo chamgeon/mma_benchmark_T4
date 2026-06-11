@@ -96,11 +96,6 @@ void tiled_mma_kernel(
     copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<0>{}));
     copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<0>{}));
 
-    copy(copy_gs, thr_gs_gA(_,_,_,Int<1>{}), thr_gs_rA);
-    copy(copy_gs, thr_gs_gB(_,_,_,Int<1>{}), thr_gs_rB);
-    copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<1>{}));
-    copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<1>{}));
-
     ThrMMA thr_mma = mma.get_thread_slice(threadIdx.x);
     Tensor thr_mma_rA = thr_mma.partition_fragment_A(sA(_,_,0));   // (mma atom val A, block-cta layout A)
     Tensor thr_mma_rB = thr_mma.partition_fragment_B(sB(_,_,0));   // (mma atom val B, block-cta layout B)
@@ -121,7 +116,7 @@ void tiled_mma_kernel(
     auto K_BLOCK_MAX = size<2>(thr_mma_rA);
 
     CUTE_NO_UNROLL
-    for(int k_tile = 2; k_tile<K_TILE_MAX; k_tile += 2){
+    for(int k_tile = 1; k_tile<K_TILE_MAX-1; k_tile += 2){
         //consume first pipe
         __syncthreads();
 
@@ -136,9 +131,8 @@ void tiled_mma_kernel(
             gemm(mma, thr_mma_rA(_,_,k_block), thr_mma_rB(_,_,k_block), thr_mma_rC);
         }
 
-        __syncthreads();
-        copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<0>{}));
-        copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<0>{}));
+        copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<1>{}));
+        copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<1>{}));
 
         //consume second pipe
 
@@ -154,14 +148,17 @@ void tiled_mma_kernel(
         for(int k_block=0; k_block<K_BLOCK_MAX; ++k_block){
             gemm(mma, thr_mma_rA(_,_,k_block), thr_mma_rB(_,_,k_block), thr_mma_rC);
         }
-        __syncthreads();
-        copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<1>{}));
-        copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<1>{}));
+
+        copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<0>{}));
+        copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<0>{}));
     }
 
     //epilogue
 
     __syncthreads();
+
+    copy(copy_gs, thr_gs_gA(_,_,_,K_TILE_MAX-1), thr_gs_rA);
+    copy(copy_gs, thr_gs_gB(_,_,_,K_TILE_MAX-1), thr_gs_rB);
 
     copy(copy_sr_A, thr_sr_sA(_,_,_,Int<0>{}), thr_sr_rA);
     copy(copy_sr_B, thr_sr_sB(_,_,_,Int<0>{}), thr_sr_rB);
@@ -170,6 +167,9 @@ void tiled_mma_kernel(
     for(int k_block=0; k_block<K_BLOCK_MAX; ++k_block){
         gemm(mma, thr_mma_rA(_,_,k_block), thr_mma_rB(_,_,k_block), thr_mma_rC);
     }
+
+    copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<1>{}));
+    copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<1>{}));
 
     __syncthreads();
 
