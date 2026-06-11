@@ -116,88 +116,69 @@ void tiled_mma_kernel(
 
     clear(thr_mma_rC);
 
-    __syncthreads();
-    auto thr_sr_sA_P = thr_sr_sA(_,_,_,Int<0>{});
-    auto thr_sr_sB_P = thr_sr_sB(_,_,_,Int<0>{});
-    copy(copy_sr_A, thr_sr_sA_P(_,_,Int<0>{}), thr_sr_rA(_,_,Int<0>{}));
-    copy(copy_sr_B, thr_sr_sB_P(_,_,Int<0>{}), thr_sr_rB(_,_,Int<0>{}));
-
     //main loop
     auto K_TILE_MAX = size<3>(thr_gs_gA);
     auto K_BLOCK_MAX = size<2>(thr_mma_rA);
 
     CUTE_NO_UNROLL
     for(int k_tile = 2; k_tile<K_TILE_MAX; k_tile += 2){
+        //consume first pipe
+        __syncthreads();
 
         copy(copy_gs, thr_gs_gA(_,_,_,k_tile), thr_gs_rA);
         copy(copy_gs, thr_gs_gB(_,_,_,k_tile), thr_gs_rB);
 
-        CUTE_UNROLL   //consume first pipe
-        for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
+        copy(copy_sr_A, thr_sr_sA(_,_,_,Int<0>{}), thr_sr_rA);
+        copy(copy_sr_B, thr_sr_sB(_,_,_,Int<0>{}), thr_sr_rB);
 
-            if(k_block_cur == K_BLOCK_MAX-1){
-                __syncthreads();
-                copy(thr_gs_rA, thr_gs_sA(_,_,_,0));
-                copy(thr_gs_rB, thr_gs_sB(_,_,_,0));
-
-                thr_sr_sA_P = thr_sr_sA(_,_,_,Int<1>{});
-                thr_sr_sB_P = thr_sr_sB(_,_,_,Int<1>{});
-            }
-            
-            auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
-            copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
-            copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
-
-            gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
+        CUTE_UNROLL
+        for(int k_block=0; k_block<K_BLOCK_MAX; ++k_block){
+            gemm(mma, thr_mma_rA(_,_,k_block), thr_mma_rB(_,_,k_block), thr_mma_rC);
         }
+
+        __syncthreads();
+        copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<0>{}));
+        copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<0>{}));
+
+        //consume second pipe
+
+        __syncthreads();
 
         copy(copy_gs, thr_gs_gA(_,_,_,k_tile+1), thr_gs_rA);
         copy(copy_gs, thr_gs_gB(_,_,_,k_tile+1), thr_gs_rB);
 
-        CUTE_UNROLL   //consume second pipe
-        for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
+        copy(copy_sr_A, thr_sr_sA(_,_,_,Int<1>{}), thr_sr_rA);
+        copy(copy_sr_B, thr_sr_sB(_,_,_,Int<1>{}), thr_sr_rB);
 
-            if(k_block_cur == K_BLOCK_MAX-1){
-                __syncthreads();
-                copy(thr_gs_rA, thr_gs_sA(_,_,_,1));
-                copy(thr_gs_rB, thr_gs_sB(_,_,_,1));
-
-                thr_sr_sA_P = thr_sr_sA(_,_,_,Int<0>{});
-                thr_sr_sB_P = thr_sr_sB(_,_,_,Int<0>{});
-            }
-
-            auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
-            copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
-            copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
-
-            gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
+        CUTE_UNROLL
+        for(int k_block=0; k_block<K_BLOCK_MAX; ++k_block){
+            gemm(mma, thr_mma_rA(_,_,k_block), thr_mma_rB(_,_,k_block), thr_mma_rC);
         }
+        __syncthreads();
+        copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<1>{}));
+        copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<1>{}));
     }
 
     //epilogue
-    CUTE_UNROLL   //consume first pipe
-    for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
-        if(k_block_cur == K_BLOCK_MAX-1){
-            thr_sr_sA_P = thr_sr_sA(_,_,_,Int<1>{});
-            thr_sr_sB_P = thr_sr_sB(_,_,_,Int<1>{});
-        }
-        
-        auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
-        copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
-        copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
+    __syncthreads();
 
-        gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
+    copy(copy_sr_A, thr_sr_sA(_,_,_,Int<0>{}), thr_sr_rA);
+    copy(copy_sr_B, thr_sr_sB(_,_,_,Int<0>{}), thr_sr_rB);
+
+    CUTE_UNROLL
+    for(int k_block=0; k_block<K_BLOCK_MAX; ++k_block){
+        gemm(mma, thr_mma_rA(_,_,k_block), thr_mma_rB(_,_,k_block), thr_mma_rC);
     }
 
-    CUTE_UNROLL   //consume second pipe
-    for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
-        
-        auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
-        copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
-        copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
+    __syncthreads();
 
-        gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
+    copy(copy_sr_A, thr_sr_sA(_,_,_,Int<1>{}), thr_sr_rA);
+    copy(copy_sr_B, thr_sr_sB(_,_,_,Int<1>{}), thr_sr_rB);
+
+    CUTE_UNROLL   //consume second pipe
+    for(int k_block=0; k_block<K_BLOCK_MAX; ++k_block){
+        gemm(mma, thr_mma_rA(_,_,k_block), thr_mma_rB(_,_,k_block), thr_mma_rC);
     }
 
     axpby(alpha, thr_mma_rC, beta, thr_mma_gC);
@@ -252,13 +233,13 @@ int main(int argc, char** argv){
     using CopyOP_SR = SM75_U32x4_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
-    constexpr int M{8192};
-    constexpr int N(8192);
-    constexpr int K{8192};
+    //constexpr int M{8192};
+    //constexpr int N(8192);
+    //constexpr int K{8192};
     //for correctness test
-    //constexpr int M{512};
-    //constexpr int N{512};
-    //constexpr int K{256};
+    constexpr int M{512};
+    constexpr int N{512};
+    constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{256};
     constexpr int bK{32};
@@ -356,7 +337,7 @@ int main(int argc, char** argv){
 
 
     //correctness
-    #if 0
+    #if 1
 
     auto h_gmem_C_ref = h_gmem_C;
 
@@ -388,7 +369,7 @@ int main(int argc, char** argv){
     run_gemm();
     cudaDeviceSynchronize();
 
-    #if 1
+    #if 0
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;
