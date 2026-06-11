@@ -34,7 +34,7 @@ struct UniversalCopyCacheGlobal
         uint32_t*       dst_ptr = reinterpret_cast<uint32_t*>(&dst);
 
         asm volatile(
-        "ld.global.cg.L2::128B.v4.b32 {%0, %1, %2, %3}, [%4];\n"
+        "ld.global.cg.L2::64B.v4.b32 {%0, %1, %2, %3}, [%4];\n"
         : "=r"(dst_ptr[0]), "=r"(dst_ptr[1]), "=r"(dst_ptr[2]), "=r"(dst_ptr[3])
         : "l"(src_ptr)
         );
@@ -249,7 +249,7 @@ int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopyCacheGlobal<uint128_t>;
-    using CopyOP_SR = SM75_U32x2_LDSM_N;
+    using CopyOP_SR = SM75_U32x4_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
     constexpr int M{8192};
@@ -328,7 +328,7 @@ int main(int argc, char** argv){
 
     auto const mma_warps_shape = make_shape(Int<2>{}, Int<4>{}, Int<1>{});   ///2x4x1 atoms per cta
     auto const mma_warps_layout = make_layout(mma_warps_shape);
-    auto const mma_tile = make_tile(Int<32>{}, Int<64>{}, Int<8>{});
+    auto const mma_tile = make_tile(Int<64>{}, Int<128>{}, Int<8>{});
 
     //atom, tiledcopy, tiledmma, dims
 
