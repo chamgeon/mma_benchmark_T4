@@ -198,7 +198,7 @@ int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopyCacheGlobal<uint128_t>;
-    using CopyOP_SR = SM75_U32x4_LDSM_N;
+    using CopyOP_SR = SM75_U16x8_LDSM_T;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
     constexpr int M{8192};
