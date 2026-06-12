@@ -117,11 +117,11 @@ void tiled_mma_kernel(
 
     CUTE_NO_UNROLL
     for(int k_tile = 1; k_tile<K_TILE_MAX; k_tile += 2){
-        __syncthreads();
 
         copy(copy_gs, thr_gs_gA(_,_,_,k_tile), thr_gs_rA);
         copy(copy_gs, thr_gs_gB(_,_,_,k_tile), thr_gs_rB);
 
+        __syncthreads();
         CUTE_UNROLL   //consume first pipe
         for(int k_block=0; k_block<K_BLOCK_MAX; ++k_block){
             copy(copy_sr_A, thr_sr_sA(_,_,k_block,0), thr_sr_rA(_,_,k_block));
@@ -132,12 +132,11 @@ void tiled_mma_kernel(
         copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<1>{}));
         copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<1>{}));
 
-        __syncthreads();
-
         auto k_tile_next = (k_tile+Int<1>{})%K_TILE_MAX;
         copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
         copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
 
+        __syncthreads();
         CUTE_UNROLL   //consume second pipe
         for(int k_block=0; k_block<K_BLOCK_MAX; ++k_block){
             copy(copy_sr_A, thr_sr_sA(_,_,k_block,1), thr_sr_rA(_,_,k_block));
@@ -198,7 +197,7 @@ int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopyCacheGlobal<uint128_t>;
-    using CopyOP_SR = SM75_U16x8_LDSM_T;
+    using CopyOP_SR = SM75_U32x4_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
     constexpr int M{8192};

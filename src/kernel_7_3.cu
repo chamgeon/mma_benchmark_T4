@@ -1,4 +1,4 @@
-//custom copy atom
+//2-stage pipelining
 
 #include <cstdlib>
 #include <cstdio>
@@ -12,6 +12,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <cute/tensor.hpp>
+
 
 namespace cute
 {
@@ -33,7 +34,7 @@ struct UniversalCopyCacheGlobal
         uint32_t*       dst_ptr = reinterpret_cast<uint32_t*>(&dst);
 
         asm volatile(
-        "ld.global.nc.L2::128B.v4.b32 {%0, %1, %2, %3}, [%4];\n"
+        "ld.global.cg.L2::128B.v4.b32 {%0, %1, %2, %3}, [%4];\n"
         : "=r"(dst_ptr[0]), "=r"(dst_ptr[1]), "=r"(dst_ptr[2]), "=r"(dst_ptr[3])
         : "l"(src_ptr)
         );
@@ -86,16 +87,23 @@ void tiled_mma_kernel(
     Tensor thr_gs_gB = thr_copy_gs.partition_S(gB);   // (copy gs atom val, block-tile layout, k)
     Tensor thr_gs_sA = thr_copy_gs.partition_D(sA);   // (copy gs atom val, block-tile layout)
     Tensor thr_gs_sB = thr_copy_gs.partition_D(sB);   // (copy gs atom val, block-tile layout)
-    Tensor thr_gs_rA = make_fragment_like(thr_gs_sA);
-    Tensor thr_gs_rB = make_fragment_like(thr_gs_sB);
+    Tensor thr_gs_rA = make_fragment_like(thr_gs_sA(_,_,_,0));
+    Tensor thr_gs_rB = make_fragment_like(thr_gs_sB(_,_,_,0));
 
     //prefetch
-    copy(copy_gs, thr_gs_gA(_,_,_,0), thr_gs_rA);
-    copy(copy_gs, thr_gs_gB(_,_,_,0), thr_gs_rB);
+    copy(copy_gs, thr_gs_gA(_,_,_,Int<0>{}), thr_gs_rA);
+    copy(copy_gs, thr_gs_gB(_,_,_,Int<0>{}), thr_gs_rB);
+    copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<0>{}));
+    copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<0>{}));
+
+    copy(copy_gs, thr_gs_gA(_,_,_,Int<1>{}), thr_gs_rA);
+    copy(copy_gs, thr_gs_gB(_,_,_,Int<1>{}), thr_gs_rB);
+    copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<1>{}));
+    copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<1>{}));
 
     ThrMMA thr_mma = mma.get_thread_slice(threadIdx.x);
-    Tensor thr_mma_rA = thr_mma.partition_fragment_A(sA);   // (mma atom val A, block-cta layout A)
-    Tensor thr_mma_rB = thr_mma.partition_fragment_B(sB);   // (mma atom val B, block-cta layout B)
+    Tensor thr_mma_rA = thr_mma.partition_fragment_A(sA(_,_,0));   // (mma atom val A, block-cta layout A)
+    Tensor thr_mma_rB = thr_mma.partition_fragment_B(sB(_,_,0));   // (mma atom val B, block-cta layout B)
     Tensor thr_mma_gC = thr_mma.partition_C(gC);
     Tensor thr_mma_rC = thr_mma.make_fragment_C(thr_mma_gC);   // (mma atom val C, block-cta layout C)
 
@@ -108,42 +116,95 @@ void tiled_mma_kernel(
 
     clear(thr_mma_rC);
 
-    copy(thr_gs_rA, thr_gs_sA);
-    copy(thr_gs_rB, thr_gs_sB);
     __syncthreads();
-
-    copy(copy_sr_A, thr_sr_sA(_,_,0), thr_sr_rA(_,_,0));
-    copy(copy_sr_B, thr_sr_sB(_,_,0), thr_sr_rB(_,_,0));
-
+    auto thr_sr_sA_P = thr_sr_sA(_,_,_,Int<0>{});
+    auto thr_sr_sB_P = thr_sr_sB(_,_,_,Int<0>{});
+    copy(copy_sr_A, thr_sr_sA_P(_,_,Int<0>{}), thr_sr_rA(_,_,Int<0>{}));
+    copy(copy_sr_B, thr_sr_sB_P(_,_,Int<0>{}), thr_sr_rB(_,_,Int<0>{}));
 
     //main loop
     auto K_TILE_MAX = size<3>(thr_gs_gA);
     auto K_BLOCK_MAX = size<2>(thr_mma_rA);
 
     CUTE_NO_UNROLL
-    for(int k_tile_cur=0; k_tile_cur<K_TILE_MAX; ++k_tile_cur){
-        CUTE_UNROLL
-        for(int k_block_cur=0; k_block_cur < K_BLOCK_MAX; ++k_block_cur){
+    for(int k_tile = 2; k_tile<K_TILE_MAX; k_tile += 2){
+
+        CUTE_UNROLL   //consume first pipe
+        for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
+
             if(k_block_cur == K_BLOCK_MAX-1){
                 __syncthreads();
-                copy(thr_gs_rA, thr_gs_sA);
-                copy(thr_gs_rB, thr_gs_sB);
-                __syncthreads();
+                copy(thr_gs_rA, thr_gs_sA(_,_,_,0));
+                copy(thr_gs_rB, thr_gs_sB(_,_,_,0));
+
+                thr_sr_sA_P = thr_sr_sA(_,_,_,Int<1>{});
+                thr_sr_sB_P = thr_sr_sB(_,_,_,Int<1>{});
             }
             
             auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
-            copy(copy_sr_A, thr_sr_sA(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
-            copy(copy_sr_B, thr_sr_sB(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
+            copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
+            copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
 
             if(k_block_cur == 0){
-                int k_tile_next = (k_tile_cur + 1 < K_TILE_MAX) ? k_tile_cur + 1 : k_tile_cur;
-                copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
-                copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
+                copy(copy_gs, thr_gs_gA(_,_,_,k_tile), thr_gs_rA);
+                copy(copy_gs, thr_gs_gB(_,_,_,k_tile), thr_gs_rB);
+            }
+
+            gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
+        }
+
+        CUTE_UNROLL   //consume second pipe
+        for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
+
+            if(k_block_cur == K_BLOCK_MAX-1){
+                __syncthreads();
+                copy(thr_gs_rA, thr_gs_sA(_,_,_,1));
+                copy(thr_gs_rB, thr_gs_sB(_,_,_,1));
+
+                thr_sr_sA_P = thr_sr_sA(_,_,_,Int<0>{});
+                thr_sr_sB_P = thr_sr_sB(_,_,_,Int<0>{});
+            }
+
+            auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
+            copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
+            copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
+
+            if(k_block_cur == 0){
+                copy(copy_gs, thr_gs_gA(_,_,_,k_tile+1), thr_gs_rA);
+                copy(copy_gs, thr_gs_gB(_,_,_,k_tile+1), thr_gs_rB);
             }
 
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
     }
+
+    //epilogue
+    CUTE_UNROLL   //consume first pipe
+    for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
+
+        if(k_block_cur == K_BLOCK_MAX-1){
+            __syncthreads();
+            thr_sr_sA_P = thr_sr_sA(_,_,_,Int<1>{});
+            thr_sr_sB_P = thr_sr_sB(_,_,_,Int<1>{});
+        }
+        
+        auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
+        copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
+        copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
+
+        gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
+    }
+
+    CUTE_UNROLL   //consume second pipe
+    for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
+        
+        auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
+        copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
+        copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
+
+        gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
+    }
+
     axpby(alpha, thr_mma_rC, beta, thr_mma_gC);
 }
 
@@ -193,7 +254,7 @@ int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopyCacheGlobal<uint128_t>;
-    using CopyOP_SR = SM75_U32x2_LDSM_N;
+    using CopyOP_SR = SM75_U32x4_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
     constexpr int M{8192};
@@ -205,7 +266,8 @@ int main(int argc, char** argv){
     //constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{256};
-    constexpr int bK{64};
+    constexpr int bK{32};
+    constexpr int bP{2};
     
     constexpr int gmem_size_A = M*K;
     constexpr int gmem_size_B = N*K;
@@ -236,6 +298,7 @@ int main(int argc, char** argv){
     auto const shape_bM = Int<bM>{};
     auto const shape_bN = Int<bN>{};
     auto const shape_bK = Int<bK>{};
+    auto const shape_bP = Int<bP>{};
 
     auto const gmem_shape_A = make_shape(shape_M, shape_K);
     auto const gmem_shape_B = make_shape(shape_N, shape_K);
@@ -247,10 +310,10 @@ int main(int argc, char** argv){
     auto const gmem_layout_B = make_layout(gmem_shape_B,gmem_stride_B);
     auto const gmem_layout_C = make_layout(gmem_shape_C,gmem_stride_C);
     
-    auto const smem_shape_A = make_shape(shape_bM, shape_bK);
-    auto const smem_shape_B = make_shape(shape_bN, shape_bK);
-    auto const smem_stride_A = make_stride(shape_bK, Int<1>{});   //K major
-    auto const smem_stride_B = make_stride(shape_bK, Int<1>{});   //K major
+    auto const smem_shape_A = make_shape(shape_bM, shape_bK, shape_bP);
+    auto const smem_shape_B = make_shape(shape_bN, shape_bK, shape_bP);
+    auto const smem_stride_A = make_stride(shape_bK, Int<1>{}, shape_bK*shape_bM);   //K major
+    auto const smem_stride_B = make_stride(shape_bK, Int<1>{}, shape_bK*shape_bN);   //K major
     auto const swizzle = Swizzle<3, 3, 3>{};
     auto const smem_layout_A = composition(
         swizzle,
@@ -262,15 +325,15 @@ int main(int argc, char** argv){
     );
     auto const cta_tiler = make_shape(shape_bM, shape_bN, shape_bK);
 
-    auto const copy_gs_thread_shape = make_shape(Int<32>{}, Int<8>{});
-    auto const copy_gs_thread_stride = make_stride(Int<8>{}, Int<1>{});
+    auto const copy_gs_thread_shape = make_shape(Int<64>{}, Int<4>{});
+    auto const copy_gs_thread_stride = make_stride(Int<4>{}, Int<1>{});
     auto const copy_gs_thread_layout = make_layout(copy_gs_thread_shape, copy_gs_thread_stride);
     auto const copy_gs_val_shape = make_shape(Int<1>{}, Int<8>{});
     auto const copy_gs_val_layout = make_layout(copy_gs_val_shape);
 
     auto const mma_warps_shape = make_shape(Int<2>{}, Int<4>{}, Int<1>{});   ///2x4x1 atoms per cta
     auto const mma_warps_layout = make_layout(mma_warps_shape);
-    auto const mma_tile = make_tile(Int<32>{}, Int<64>{}, Int<8>{});
+    auto const mma_tile = make_tile(Int<64>{}, Int<128>{}, Int<8>{});
 
     //atom, tiledcopy, tiledmma, dims
 
@@ -353,7 +416,7 @@ int main(int argc, char** argv){
     double total_flops = 2.0 * M * N * K;
     double gflops_per_sec = (total_flops) / (avg_time_ms * 1.0e6);
     times.clear();
-    std::cout << "kernel_6: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
+    std::cout << "kernel_7: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
     #endif
 
     return 0;
