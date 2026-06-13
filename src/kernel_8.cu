@@ -1,4 +1,4 @@
-//2-stage pipelining
+//epilogue optimization
 
 #include <cstdlib>
 #include <cstdio>
@@ -111,6 +111,12 @@ void tiled_mma_kernel(
 
     clear(thr_mma_rC);
 
+    __syncthreads();
+    auto thr_sr_sA_P = thr_sr_sA(_,_,_,Int<0>{});
+    auto thr_sr_sB_P = thr_sr_sB(_,_,_,Int<0>{});
+    copy(copy_sr_A, thr_sr_sA_P(_,_,Int<0>{}), thr_sr_rA(_,_,Int<0>{}));
+    copy(copy_sr_B, thr_sr_sB_P(_,_,Int<0>{}), thr_sr_rB(_,_,Int<0>{}));
+
     //main loop
     auto K_TILE_MAX = size<3>(thr_gs_gA);
     auto K_BLOCK_MAX = size<2>(thr_mma_rA);
@@ -118,34 +124,54 @@ void tiled_mma_kernel(
     CUTE_NO_UNROLL
     for(int k_tile = 1; k_tile<K_TILE_MAX; k_tile += 2){
 
-        copy(copy_gs, thr_gs_gA(_,_,_,k_tile), thr_gs_rA);
-        copy(copy_gs, thr_gs_gB(_,_,_,k_tile), thr_gs_rB);
+        CUTE_UNROLL //consume first pipe
+        for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
-        __syncthreads();
-        CUTE_UNROLL   //consume first pipe
-        for(int k_block=0; k_block<K_BLOCK_MAX; ++k_block){
-            copy(copy_sr_A, thr_sr_sA(_,_,k_block,0), thr_sr_rA(_,_,k_block));
-            copy(copy_sr_B, thr_sr_sB(_,_,k_block,0), thr_sr_rB(_,_,k_block));
-            gemm(mma, thr_mma_rA(_,_,k_block), thr_mma_rB(_,_,k_block), thr_mma_rC);
+            if(k_block_cur == K_BLOCK_MAX-1){
+                copy(thr_gs_rA, thr_gs_sA(_,_,_,1));
+                copy(thr_gs_rB, thr_gs_sB(_,_,_,1));
+                __syncthreads();
+
+                thr_sr_sA_P = thr_sr_sA(_,_,_,1);
+                thr_sr_sB_P = thr_sr_sB(_,_,_,1);
+            }
+
+            auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
+            copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
+            copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
+
+            if(k_block_cur == 0){
+                copy(copy_gs, thr_gs_gA(_,_,_,k_tile), thr_gs_rA);
+                copy(copy_gs, thr_gs_gB(_,_,_,k_tile), thr_gs_rB);
+            }
+
+            gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
 
-        copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<1>{}));
-        copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<1>{}));
+        CUTE_UNROLL //consume second pipe
+        for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
-        auto k_tile_next = (k_tile+Int<1>{})%K_TILE_MAX;
-        copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
-        copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
+            if(k_block_cur == K_BLOCK_MAX-1){
+                copy(thr_gs_rA, thr_gs_sA(_,_,_,0));
+                copy(thr_gs_rB, thr_gs_sB(_,_,_,0));
+                __syncthreads();
 
-        __syncthreads();
-        CUTE_UNROLL   //consume second pipe
-        for(int k_block=0; k_block<K_BLOCK_MAX; ++k_block){
-            copy(copy_sr_A, thr_sr_sA(_,_,k_block,1), thr_sr_rA(_,_,k_block));
-            copy(copy_sr_B, thr_sr_sB(_,_,k_block,1), thr_sr_rB(_,_,k_block));
-            gemm(mma, thr_mma_rA(_,_,k_block), thr_mma_rB(_,_,k_block), thr_mma_rC);
+                thr_sr_sA_P = thr_sr_sA(_,_,_,0);
+                thr_sr_sB_P = thr_sr_sB(_,_,_,0);
+            }
+
+            auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
+            copy(copy_sr_A, thr_sr_sA_P(_,_,k_block_next), thr_sr_rA(_,_,k_block_next));
+            copy(copy_sr_B, thr_sr_sB_P(_,_,k_block_next), thr_sr_rB(_,_,k_block_next));
+
+            if(k_block_cur == 0){
+                auto k_tile_next = (k_tile+Int<1>{})%K_TILE_MAX;
+                copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
+                copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
+            }
+
+            gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
-
-        copy(thr_gs_rA, thr_gs_sA(_,_,_,Int<0>{}));
-        copy(thr_gs_rB, thr_gs_sB(_,_,_,Int<0>{}));
     }
 
     axpby(alpha, thr_mma_rC, beta, thr_mma_gC);
@@ -197,7 +223,7 @@ int main(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopyCacheGlobal<uint128_t>;
-    using CopyOP_SR = SM75_U32x4_LDSM_N;
+    using CopyOP_SR = SM75_U32x2_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
     constexpr int M{8192};
@@ -276,7 +302,7 @@ int main(int argc, char** argv){
 
     auto const mma_warps_shape = make_shape(Int<2>{}, Int<4>{}, Int<1>{});   ///2x4x1 atoms per cta
     auto const mma_warps_layout = make_layout(mma_warps_shape);
-    auto const mma_tile = make_tile(Int<64>{}, Int<128>{}, Int<8>{});
+    auto const mma_tile = make_tile(Int<32>{}, Int<64>{}, Int<8>{});
 
     //atom, tiledcopy, tiledmma, dims
 
