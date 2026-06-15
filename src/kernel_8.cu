@@ -454,11 +454,11 @@ int main(int argc, char** argv){
 
     auto const ep_rs_store_shape = make_shape(
         make_shape(Int<4>{}, Int<8>{}, Int<2>{}, Int<4>{}),
-        make_shape(make_shape(Int<2>{}, Int<2>{}), Int<4>{}, Int<2>{})
+        make_shape(Int<2>{}, Int<2>{}), Int<4>{}, Int<2>{}
     );
     auto const ep_rs_store_stride = make_stride(
         make_stride(Int<256>{}, Int<1>{}, Int<16>{}, Int<1024>{}), 
-        make_stride(make_stride(Int<128>{}, Int<8>{}), Int<32>{}, Int<4096>{})
+        make_stride(Int<128>{}, Int<8>{}), Int<32>{}, Int<4096>{}
     );
 
     auto const smem_layout_C_ep = composition(
