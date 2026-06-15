@@ -217,6 +217,8 @@ void tiled_mma_kernel(
         }
     }
 
+    #if 0
+
     __syncthreads();
 
     Tensor thr_sC_ep = sC_ep(threadIdx.x,_,_,_);   //for r->s store
@@ -237,6 +239,8 @@ void tiled_mma_kernel(
         copy(thr_gsg_rC, thr_gs_gC(_,_,i));
     }
     
+    #endif
+    axpby(1.0, thr_mma_rC, 0.0, thr_mma_gC);
 }
 
 
