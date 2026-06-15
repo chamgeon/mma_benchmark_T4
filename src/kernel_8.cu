@@ -500,7 +500,7 @@ int main(int argc, char** argv){
     double total_flops = 2.0 * M * N * K;
     double gflops_per_sec = (total_flops) / (avg_time_ms * 1.0e6);
     times.clear();
-    std::cout << "kernel_7: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
+    std::cout << "kernel_8: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
     #endif
 
     return 0;
