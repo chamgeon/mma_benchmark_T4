@@ -188,13 +188,12 @@ void tiled_mma_kernel(
     //pipelined eplogue
     __syncthreads();
     
-    Tensor thr_gsg_rC = thr_gs_rA(_,_,Int<0>{});   //reuse register
+    //Tensor thr_gsg_rC = thr_gs_rA(_,_,Int<0>{});   //reuse register
     Tensor thr_sr_rC = thr_mma_rA(_,_,Int<0>{});   //reuse register
 
     auto C_KTILE_SIZE = size<2>(thr_gs_gC);
 
-    copy(copy_ep, thr_gs_gC(_,_,Int<0>{}), thr_gs_rA(_,_,Int<0>{}));
-    copy(thr_gs_rA(_,_,Int<0>{}), thr_gs_sC(_,_,Int<0>{},Int<0>{}));   //slicing to match rank
+    copy(copy_ep, thr_gs_gC(_,_,Int<0>{}), thr_gs_sC(_,_,Int<0>{},Int<0>{}));   //slicing to match rank
 
     for(int i=0; i<C_KTILE_SIZE; ++i){
         int pipe_read = i%2;
@@ -202,8 +201,7 @@ void tiled_mma_kernel(
         auto acc_cur = thr_mma_rC(_,_,i);
 
         auto next_c_tile = (i + Int<1>{})%C_KTILE_SIZE;
-        copy(copy_ep, thr_gs_gC(_,_,next_c_tile), thr_gs_rA(_,_,Int<0>{}));
-        copy(thr_gs_rA(_,_,Int<0>{}), thr_gs_sC(_,_,Int<0>{},pipe_write));
+        copy(copy_ep, thr_gs_gC(_,_,next_c_tile), thr_gs_sC(_,_,Int<0>{},pipe_write));
 
         __syncthreads();
         copy(copy_sr_C, thr_sr_sC(_,_,Int<0>{},pipe_read), thr_sr_rC);
@@ -233,8 +231,7 @@ void tiled_mma_kernel(
 
         __syncthreads();
 
-        copy(copy_ep, thr_gs_sC(_,_,Int<0>{},pipe_read), thr_gsg_rC);
-        copy(thr_gsg_rC, thr_gs_gC(_,_,i));
+        copy(copy_ep, thr_gs_sC(_,_,Int<0>{},pipe_read), thr_gs_gC(_,_,i));
     }
     
     #endif
