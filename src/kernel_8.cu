@@ -180,7 +180,7 @@ void tiled_mma_kernel(
         print(copy_sr_C); print("\n\n");
 
         print("  sC_ep : "); print(sC_ep); print("\n");
-        auto thr_ep_sC = sC_ep(threadIdx.x,_);
+        auto thr_ep_sC = sC_ep(threadIdx.x,_,_,_);
         print("  thr_ep_sC : "); print(thr_ep_sC); print("\n");
         print("  rank of it : "); print(rank(thr_ep_sC)); print("\n\n");
     }
