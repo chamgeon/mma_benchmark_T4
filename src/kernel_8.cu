@@ -188,7 +188,7 @@ void tiled_mma_kernel(
     //pipelined eplogue
     __syncthreads();
     
-    //Tensor thr_gsg_rC = thr_gs_rA(_,_,Int<0>{});   //reuse register
+    Tensor thr_gsg_rC = thr_gs_rA(_,_,Int<0>{});   //reuse register
     Tensor thr_sr_rC = thr_mma_rA(_,_,Int<0>{});   //reuse register
 
     auto C_KTILE_SIZE = size<2>(thr_gs_gC);
@@ -215,7 +215,7 @@ void tiled_mma_kernel(
         }
     }
 
-    #if 0
+    #if 1
 
     __syncthreads();
 
@@ -238,7 +238,7 @@ void tiled_mma_kernel(
     }
     
     #endif
-    axpby(1.0, thr_mma_rC, 0.0, thr_mma_gC);
+    //axpby(1.0, thr_mma_rC, 0.0, thr_mma_gC);
 }
 
 
