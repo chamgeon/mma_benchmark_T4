@@ -122,7 +122,7 @@ void tiled_mma_kernel(
 
     clear(thr_mma_rC);
 
-    #if 1
+    #if 0
     if(thread0()){
         print("  tensor_A : "); print(tensor_A); print("\n");
         print("  tensor_B : "); print(tensor_B); print("\n");
@@ -186,7 +186,7 @@ void tiled_mma_kernel(
     }
     #endif
 
-    #if 0
+    #if 1
 
     __syncthreads();
     auto thr_sr_sA_P = thr_sr_sA(_,_,_,Int<0>{});
@@ -282,7 +282,7 @@ void tiled_mma_kernel(
 
     __syncthreads();
 
-    Tensor thr_sC_ep = sC_ep(threadIdx.x,_);   //for r->s store
+    Tensor thr_sC_ep = sC_ep(threadIdx.x,_,_,_);   //for r->s store
 
     copy(thr_mma_rC(_,_,Int<0>{}), thr_sC_ep(_,_,Int<0>{}));
 
@@ -353,13 +353,13 @@ int main(int argc, char** argv){
     using CopyOP_SR_C = SM75_U16x4_LDSM_T;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
-    constexpr int M{8192};
-    constexpr int N(8192);
-    constexpr int K{8192};
+    //constexpr int M{8192};
+    //constexpr int N(8192);
+    //constexpr int K{8192};
     //for correctness test
-    //constexpr int M{512};
-    //constexpr int N{512};
-    //constexpr int K{256};
+    constexpr int M{512};
+    constexpr int N{512};
+    constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{256};
     constexpr int bK{32};
@@ -512,7 +512,7 @@ int main(int argc, char** argv){
 
 
     //correctness
-    #if 0
+    #if 1
 
     auto h_gmem_C_ref = h_gmem_C;
 
