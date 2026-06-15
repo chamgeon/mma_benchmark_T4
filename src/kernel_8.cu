@@ -185,6 +185,8 @@ void tiled_mma_kernel(
         }
     }
 
+    #if 0
+
     //pipelined eplogue
     __syncthreads();
     
@@ -213,8 +215,6 @@ void tiled_mma_kernel(
         }
     }
 
-    #if 1
-
     __syncthreads();
 
     Tensor thr_sC_ep = sC_ep(threadIdx.x,_,_,_);   //for r->s store
@@ -235,7 +235,7 @@ void tiled_mma_kernel(
     }
     
     #endif
-    //axpby(1.0, thr_mma_rC, 0.0, thr_mma_gC);
+    axpby(alpha, thr_mma_rC, beta, thr_mma_gC);
 }
 
 
@@ -289,13 +289,13 @@ int main(int argc, char** argv){
     using CopyOP_SR_C = SM75_U16x4_LDSM_T;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
-    constexpr int M{8192};
-    constexpr int N(8192);
-    constexpr int K{8192};
+    //constexpr int M{8192};
+    //constexpr int N(8192);
+    //constexpr int K{8192};
     //for correctness test
-    //constexpr int M{512};
-    //constexpr int N{512};
-    //constexpr int K{256};
+    constexpr int M{512};
+    constexpr int N{512};
+    constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{256};
     constexpr int bK{32};
@@ -337,7 +337,7 @@ int main(int argc, char** argv){
     auto const gmem_shape_C = make_shape(shape_M, shape_N);
     auto const gmem_stride_A = make_stride(shape_K, Int<1>{});   //K major
     auto const gmem_stride_B = make_stride(shape_K, Int<1>{});   //K major
-    auto const gmem_stride_C = make_stride(Int<1>{}, shape_M);   //M major
+    auto const gmem_stride_C = make_stride(shape_N, Int<1>{});   //N major
     auto const gmem_layout_A = make_layout(gmem_shape_A,gmem_stride_A);
     auto const gmem_layout_B = make_layout(gmem_shape_B,gmem_stride_B);
     auto const gmem_layout_C = make_layout(gmem_shape_C,gmem_stride_C);
@@ -347,7 +347,7 @@ int main(int argc, char** argv){
     auto const smem_shape_C = make_shape(shape_bM, shape_bK, shape_bP);
     auto const smem_stride_A = make_stride(shape_bK, Int<1>{}, shape_bK*shape_bM);   //K major
     auto const smem_stride_B = make_stride(shape_bK, Int<1>{}, shape_bK*shape_bN);   //K major
-    auto const smem_stride_C = make_stride(Int<1>{}, shape_bM, shape_bK*shape_bM);   //M major
+    auto const smem_stride_C = make_stride(shape_bK, Int<1>{}, shape_bK*shape_bM);   //M major
     auto const swizzle = Swizzle<3, 3, 3>{};
     auto const smem_layout_A = composition(
         swizzle,
@@ -448,7 +448,7 @@ int main(int argc, char** argv){
 
 
     //correctness
-    #if 0
+    #if 1
 
     auto h_gmem_C_ref = h_gmem_C;
 
@@ -480,7 +480,7 @@ int main(int argc, char** argv){
     run_gemm();
     cudaDeviceSynchronize();
 
-    #if 1
+    #if 0
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;
