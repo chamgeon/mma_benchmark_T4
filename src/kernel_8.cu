@@ -290,13 +290,13 @@ int main(int argc, char** argv){
     using CopyOP_SR_C = SM75_U16x4_LDSM_T;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
-    constexpr int M{8192};
-    constexpr int N(8192);
-    constexpr int K{8192};
+    //constexpr int M{8192};
+    //constexpr int N(8192);
+    //constexpr int K{8192};
     //for correctness test
-    //constexpr int M{512};
-    //constexpr int N{512};
-    //constexpr int K{256};
+    constexpr int M{512};
+    constexpr int N{512};
+    constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{256};
     constexpr int bK{32};
