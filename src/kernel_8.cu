@@ -196,7 +196,6 @@ void tiled_mma_kernel(
     copy(copy_ep, thr_gs_gC(_,_,Int<0>{}), thr_gs_rA(_,_,Int<0>{}));
     copy(thr_gs_rA(_,_,Int<0>{}), thr_gs_sC(_,_,Int<0>{},Int<0>{}));   //slicing to match rank
 
-    CUTE_NO_UNROLL
     for(int i=0; i<C_KTILE_SIZE; ++i){
         int pipe_read = i%2;
         int pipe_write = (i+1)%2;
@@ -209,7 +208,6 @@ void tiled_mma_kernel(
         __syncthreads();
         copy(copy_sr_C, thr_sr_sC(_,_,Int<0>{},pipe_read), thr_sr_rC);
         
-        CUTE_UNROLL
         for(int j=0; j<size(thr_sr_rC); ++j){
             acc_cur(j) = static_cast<TABC>(
                 float(alpha) * acc_cur(j) + float(beta) * float(thr_sr_rC(j))
