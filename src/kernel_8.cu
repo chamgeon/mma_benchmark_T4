@@ -122,72 +122,6 @@ void tiled_mma_kernel(
 
     clear(thr_mma_rC);
 
-    #if 0
-    if(thread0()){
-        print("  tensor_A : "); print(tensor_A); print("\n");
-        print("  tensor_B : "); print(tensor_B); print("\n");
-        print("  tensor_C : "); print(tensor_C); print("\n\n");
-
-        print("  gA : "); print(gA); print("\n");
-        print("  gB : "); print(gB); print("\n");
-        print("  gC : "); print(gC); print("\n\n");
-        print("  sA : "); print(sA); print("\n");
-        print("  sB : "); print(sB); print("\n");
-        print("  sC : "); print(sC); print("\n\n");
-
-        print(copy_gs); print("\n\n");
-        print(copy_ep); print("\n\n");
-
-        print("  thr_gs_gA : "); print(thr_gs_gA); print("\n");
-        print("  thr_gs_gB : "); print(thr_gs_gB); print("\n");
-        print("  thr_gs_gC : "); print(thr_gs_gC); print("\n");
-        print("  thr_gs_sA : "); print(thr_gs_sA); print("\n");
-        print("  thr_gs_sB : "); print(thr_gs_sB); print("\n");
-        print("  thr_gs_sC : "); print(thr_gs_sC); print("\n\n");
-
-        print("  thr_gs_rA : "); print(thr_gs_rA); print("\n");
-        print("  thr_gs_rB : "); print(thr_gs_rB); print("\n\n");
-
-        auto thr_thrfrg_A = mma.thrfrg_A(sA.layout());
-        auto thr_thrfrg_B = mma.thrfrg_B(sB.layout());
-        auto thr_thrfrg_C = mma.thrfrg_C(gC.layout());
-
-        print("  thrfrg_A : "); print(thr_thrfrg_A); print("\n");
-        print("  thrfrg_B : "); print(thr_thrfrg_B); print("\n");
-        print("  thrfrg_C : "); print(thr_thrfrg_C); print("\n\n");
-
-        print("  thr_mma_rA : "); print(thr_mma_rA); print("\n");
-        print("  thr_mma_rB : "); print(thr_mma_rB); print("\n");
-        print("  thr_mma_rC : "); print(thr_mma_rC); print("\n\n");
-
-        auto tidfrg_S_A = copy_sr_A.tidfrg_S(sA.layout());
-        auto tidfrg_S_B = copy_sr_B.tidfrg_S(sB.layout());
-        auto tidfrg_S_C = copy_sr_C.tidfrg_S(sC.layout());
-
-        print("  tidfrg_S_A : "); print(tidfrg_S_A); print("\n");
-        print("  thrfrg_S_B : "); print(tidfrg_S_B); print("\n");
-        print("  thrfrg_S_C : "); print(tidfrg_S_C); print("\n\n");
-
-        print("  thr_sr_sA : "); print(thr_sr_sA); print("\n");
-        print("  thr_sr_sB : "); print(thr_sr_sB); print("\n");
-        print("  thr_sr_sC : "); print(thr_sr_sC); print("\n");
-        print("  thr_sr_rA : "); print(thr_sr_rA); print("\n");
-        print("  thr_sr_rB : "); print(thr_sr_rB); print("\n");
-        print("  thr_sr_rC : "); print(make_fragment_like<TABC>(thr_mma_rC(_,_,0))); print("\n\n");
-
-        print(copy_sr_A); print("\n");
-        print(copy_sr_B); print("\n");
-        print(copy_sr_C); print("\n\n");
-
-        print("  sC_ep : "); print(sC_ep); print("\n");
-        auto thr_ep_sC = sC_ep(threadIdx.x,_,_,_);
-        print("  thr_ep_sC : "); print(thr_ep_sC); print("\n");
-        print("  rank of it : "); print(rank(thr_ep_sC)); print("\n\n");
-    }
-    #endif
-
-    #if 1
-
     __syncthreads();
     auto thr_sr_sA_P = thr_sr_sA(_,_,_,Int<0>{});
     auto thr_sr_sB_P = thr_sr_sB(_,_,_,Int<0>{});
@@ -298,8 +232,7 @@ void tiled_mma_kernel(
 
         copy(copy_ep, thr_gs_sC(_,_,Int<0>{},pipe_read), thr_gs_gC(_,_,i));
     }
-    #endif
-    //axpby(1.0, thr_mma_rC, 0.0, thr_mma_gC);
+    
 }
 
 
@@ -353,13 +286,13 @@ int main(int argc, char** argv){
     using CopyOP_SR_C = SM75_U16x4_LDSM_T;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
-    //constexpr int M{8192};
-    //constexpr int N(8192);
-    //constexpr int K{8192};
+    constexpr int M{8192};
+    constexpr int N(8192);
+    constexpr int K{8192};
     //for correctness test
-    constexpr int M{512};
-    constexpr int N{512};
-    constexpr int K{256};
+    //constexpr int M{512};
+    //constexpr int N{512};
+    //constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{256};
     constexpr int bK{32};
@@ -512,7 +445,7 @@ int main(int argc, char** argv){
 
 
     //correctness
-    #if 1
+    #if 0
 
     auto h_gmem_C_ref = h_gmem_C;
 
@@ -544,7 +477,7 @@ int main(int argc, char** argv){
     run_gemm();
     cudaDeviceSynchronize();
 
-    #if 0
+    #if 1
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;
