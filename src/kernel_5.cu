@@ -144,7 +144,7 @@ void gemm_cpu_reference(
 
 
 
-int main(int argc, char** argv){
+void run_kernel_5(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopy<uint128_t>;
@@ -311,5 +311,5 @@ int main(int argc, char** argv){
     std::cout << "kernel_5: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
     #endif
 
-    return 0;
+    return;
 }

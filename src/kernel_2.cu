@@ -122,7 +122,7 @@ void gemm_cpu_reference(
 
 
 
-int main(int argc, char** argv){
+void run_kernel_2(int argc, char** argv){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopy<uint128_t>;
@@ -252,7 +252,7 @@ int main(int argc, char** argv){
     run_gemm();
     cudaDeviceSynchronize();
 
-    #if 0
+    #if 1
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;
@@ -279,5 +279,5 @@ int main(int argc, char** argv){
     #endif
 
 
-    return 0;
+    return;
 }

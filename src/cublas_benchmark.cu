@@ -14,7 +14,7 @@ inline half RAND_HALF(float LO = -1.0f, float HI = 1.0f)
     return (half) r;
 }
 
-int main(int argc, char *argv[]){
+void run_cublas(int argc, char *argv[]){
     const unsigned int M = 8192;
     const unsigned int N = 8192;
     const unsigned int K = 8192;
@@ -64,7 +64,6 @@ int main(int argc, char *argv[]){
     cudaDeviceSynchronize();
 
     //main loop
-    #if 0
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -86,11 +85,10 @@ int main(int argc, char *argv[]){
     double gflops_per_sec = (total_flops) / (avg_time_ms * 1.0e6);
     times.clear();
     std::cout << "cuBLAS: " << gflops_per_sec << " GFLOPS/sec for " << M << "x" << N << "x" << K << std::endl;
-    #endif
     
     cublasDestroy(handle);
     cudaFree(dev_A); cudaFree(dev_B); cudaFree(dev_C);
     free(A); free(B); free(C);
 
-    return 0;
+    return;
 }
