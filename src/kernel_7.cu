@@ -122,9 +122,6 @@ void tiled_mma_kernel(
     for(int k_tile = 1; k_tile<K_TILE_MAX; k_tile += 2){
         
         //fill second pipe, consume first pipe
-        copy(copy_gs, thr_gs_gA(_,_,_,k_tile), thr_gs_rA(_,_,_,Int<1>{}));
-        copy(copy_gs, thr_gs_gB(_,_,_,k_tile), thr_gs_rB(_,_,_,Int<1>{}));
-
         CUTE_UNROLL
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
@@ -137,15 +134,17 @@ void tiled_mma_kernel(
             copy(copy_sr_A, thr_sr_sA(_,_,k_block_cur,Int<0>{}), thr_sr_rA(_,_,k_block_cur));
             copy(copy_sr_B, thr_sr_sB(_,_,k_block_cur,Int<0>{}), thr_sr_rB(_,_,k_block_cur));
 
+            if(k_block_cur == 0){
+                copy(copy_gs, thr_gs_gA(_,_,_,k_tile), thr_gs_rA(_,_,_,Int<1>{}));
+                copy(copy_gs, thr_gs_gB(_,_,_,k_tile), thr_gs_rB(_,_,_,Int<1>{}));
+            }
+
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
 
 
         //fill first pipe, consume second pipe
         auto k_tile_next = (k_tile+Int<1>{})%K_TILE_MAX;
-        copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA(_,_,_,Int<0>{}));
-        copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB(_,_,_,Int<0>{}));
-
         CUTE_UNROLL
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
@@ -157,6 +156,11 @@ void tiled_mma_kernel(
 
             copy(copy_sr_A, thr_sr_sA(_,_,k_block_cur,Int<1>{}), thr_sr_rA(_,_,k_block_cur));
             copy(copy_sr_B, thr_sr_sB(_,_,k_block_cur,Int<1>{}), thr_sr_rB(_,_,k_block_cur));
+
+            if(k_block_cur == 0){
+                copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA(_,_,_,Int<0>{}));
+                copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB(_,_,_,Int<0>{}));
+            }
 
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
