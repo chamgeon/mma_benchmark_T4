@@ -112,8 +112,6 @@ void tiled_mma_kernel(
     clear(thr_mma_rC);
 
     __syncthreads();
-    copy(copy_sr_A, thr_sr_sA(_,_,Int<0>{},Int<0>{}), thr_sr_rA(_,_,Int<0>{}));
-    copy(copy_sr_B, thr_sr_sB(_,_,Int<0>{},Int<0>{}), thr_sr_rB(_,_,Int<0>{}));
 
     //main loop
     auto K_TILE_MAX = size<3>(thr_gs_gA);
@@ -127,15 +125,14 @@ void tiled_mma_kernel(
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
             if(k_block_cur == K_BLOCK_MAX-1){
-                pipe = (pipe+1)%2;
-                copy(thr_gs_rA, thr_gs_sA(_,_,_,pipe));
-                copy(thr_gs_rB, thr_gs_sB(_,_,_,pipe));
+                int next_pipe = (pipe+1)%2;
+                copy(thr_gs_rA, thr_gs_sA(_,_,_,next_pipe));
+                copy(thr_gs_rB, thr_gs_sB(_,_,_,next_pipe));
                 __syncthreads();
             }
 
-            auto k_block_next = (k_block_cur+Int<1>{})%K_BLOCK_MAX;
-            copy(copy_sr_A, thr_sr_sA(_,_,k_block_next,pipe), thr_sr_rA(_,_,k_block_next));
-            copy(copy_sr_B, thr_sr_sB(_,_,k_block_next,pipe), thr_sr_rB(_,_,k_block_next));
+            copy(copy_sr_A, thr_sr_sA(_,_,k_block_cur,pipe), thr_sr_rA(_,_,k_block_cur));
+            copy(copy_sr_B, thr_sr_sB(_,_,k_block_cur,pipe), thr_sr_rB(_,_,k_block_cur));
 
             if(k_block_cur == 0){
                 auto k_tile_next = (k_tile+Int<1>{})%K_TILE_MAX;
@@ -198,13 +195,13 @@ int main(int argc, char** argv){
     using CopyOP_SR = SM75_U32x4_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
-    //constexpr int M{8192};
-    //constexpr int N(8192);
-    //constexpr int K{8192};
+    constexpr int M{8192};
+    constexpr int N(8192);
+    constexpr int K{8192};
     //for correctness test
-    constexpr int M{512};
-    constexpr int N{512};
-    constexpr int K{256};
+    //constexpr int M{512};
+    //constexpr int N{512};
+    //constexpr int K{256};
     constexpr int bM{128};
     constexpr int bN{256};
     constexpr int bK{32};
@@ -302,7 +299,7 @@ int main(int argc, char** argv){
 
 
     //correctness
-    #if 1
+    #if 0
 
     auto h_gmem_C_ref = h_gmem_C;
 
@@ -334,7 +331,7 @@ int main(int argc, char** argv){
     run_gemm();
     cudaDeviceSynchronize();
 
-    #if 0
+    #if 1
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;
