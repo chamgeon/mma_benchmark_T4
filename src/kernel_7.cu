@@ -116,21 +116,22 @@ void tiled_mma_kernel(
     //main loop
     auto K_TILE_MAX = size<3>(thr_gs_gA);
     auto K_BLOCK_MAX = size<2>(thr_mma_rA);
+    auto K_BLOCK_HALF = K_BLOCK_MAX/Int<2>{}
 
     CUTE_NO_UNROLL
     for(int k_tile = 1; k_tile<K_TILE_MAX; k_tile += 2){
         
         //fill second pipe, consume first pipe
-        __syncthreads();
         copy(copy_gs, thr_gs_gA(_,_,_,k_tile), thr_gs_rA(_,_,_,Int<1>{}));
         copy(copy_gs, thr_gs_gB(_,_,_,k_tile), thr_gs_rB(_,_,_,Int<1>{}));
 
         CUTE_UNROLL
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
-            if(k_block_cur == K_BLOCK_MAX-1){
+            if(k_block_cur == K_BLOCK_HALF){
                 copy(thr_gs_rA(_,_,_,Int<1>{}), thr_gs_sA(_,_,_,Int<1>{}));
                 copy(thr_gs_rB(_,_,_,Int<1>{}), thr_gs_sB(_,_,_,Int<1>{}));
+                __syncthreads();
             }
 
             copy(copy_sr_A, thr_sr_sA(_,_,k_block_cur,Int<0>{}), thr_sr_rA(_,_,k_block_cur));
@@ -142,16 +143,16 @@ void tiled_mma_kernel(
 
         //fill first pipe, consume second pipe
         auto k_tile_next = (k_tile+Int<1>{})%K_TILE_MAX;
-        __syncthreads();
         copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA(_,_,_,Int<0>{}));
         copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB(_,_,_,Int<0>{}));
 
         CUTE_UNROLL
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
 
-            if(k_block_cur == K_BLOCK_MAX-1){
+            if(k_block_cur == K_BLOCK_HALF){
                 copy(thr_gs_rA(_,_,_,Int<0>{}), thr_gs_sA(_,_,_,Int<0>{}));
                 copy(thr_gs_rB(_,_,_,Int<0>{}), thr_gs_sB(_,_,_,Int<0>{}));
+                __syncthreads();
             }
 
             copy(copy_sr_A, thr_sr_sA(_,_,k_block_cur,Int<1>{}), thr_sr_rA(_,_,k_block_cur));
