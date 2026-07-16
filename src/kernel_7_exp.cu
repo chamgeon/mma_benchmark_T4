@@ -112,8 +112,8 @@ void tiled_mma_kernel(
     clear(thr_mma_rC);
 
     __syncthreads();
-    copy(copy_sr_A, thr_sr_sA_P(_,_,Int<0>{},Int<0>{}), thr_sr_rA(_,_,Int<0>{}));
-    copy(copy_sr_B, thr_sr_sB_P(_,_,Int<0>{},Int<0>{}), thr_sr_rB(_,_,Int<0>{}));
+    copy(copy_sr_A, thr_sr_sA(_,_,Int<0>{},Int<0>{}), thr_sr_rA(_,_,Int<0>{}));
+    copy(copy_sr_B, thr_sr_sB(_,_,Int<0>{},Int<0>{}), thr_sr_rB(_,_,Int<0>{}));
 
     //main loop
     auto K_TILE_MAX = size<3>(thr_gs_gA);
