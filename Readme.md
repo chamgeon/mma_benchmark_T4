@@ -10,16 +10,16 @@ All benchmarks run on an **NVIDIA T4 GPU** with matrix size **8192×8192×8192**
 
 | Kernel | Optimization | GFLOPS/sec | vs Previous | vs cuBLAS |
 |--------|-------------|------------|-------------|-----------|
-| 1 | Naive | 3,000.78 | — | 6.5% |
-| 2 | Tiled copy + tiled MMA (vectorized) | 12,423.8 | +314% | 27.0% |
-| 3 | Swizzle | 20,233.8 | +63% | 43.9% |
-| 4 | Explicit register buffer for copy | 21,553.1 | +6.5% | 46.8% |
-| 5 | Arithmetic intensity analysis + improvement | 37,117.8 | +72% | 80.6% |
-| 6 | LDSM pipelining + MMA tile size fix | 40,079.6 | +8.0% | 87.1% |
-| 7 | 2-stage pipelining | 41,503.3 | +3.6% | **90.2%** |
-| cuBLAS | Reference | 46,033.3 | — | 100% |
+| 1 | Naive | 3,000.78 | — | 6.3% |
+| 2 | Tiled copy + tiled MMA (vectorized) | 12,423.8 | +314% | 26.0% |
+| 3 | Swizzle | 20,233.8 | +63% | 42.5% |
+| 4 | Explicit register buffer for copy | 21,553.1 | +6.5% | 45.2% |
+| 5 | Arithmetic intensity improvement | 37,117.8 | +72% | 77.9% |
+| 6 | LDSM pipelining + MMA tile size fix | 40,079.6 | +8.0% | 84.1% |
+| 7 | 2-stage pipelining | 42,957.1 | +7.2% | **90.1%** |
+| cuBLAS | Reference | 47,655.2 | — | 100% |
 
-Kernel 7 achieves **90.2% of cuBLAS performance**.
+Kernel 7 achieves **90.1% of cuBLAS performance**.
 
 ---
 
