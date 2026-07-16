@@ -116,7 +116,7 @@ void tiled_mma_kernel(
     //main loop
     auto K_TILE_MAX = size<3>(thr_gs_gA);
     auto K_BLOCK_MAX = size<2>(thr_mma_rA);
-    auto K_BLOCK_HALF = K_BLOCK_MAX/Int<2>{}
+    auto K_BLOCK_HALF = K_BLOCK_MAX/Int<2>{};
 
     CUTE_NO_UNROLL
     for(int k_tile = 1; k_tile<K_TILE_MAX; k_tile += 2){
