@@ -126,15 +126,18 @@ void tiled_mma_kernel(
 
         CUTE_UNROLL
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
+
+            if(k_block_cur == K_BLOCK_MAX-1){
+                copy(thr_gs_rA(_,_,_,Int<1>{}), thr_gs_sA(_,_,_,Int<1>{}));
+                copy(thr_gs_rB(_,_,_,Int<1>{}), thr_gs_sB(_,_,_,Int<1>{}));
+                __syncthreads();
+            }
+
             copy(copy_sr_A, thr_sr_sA(_,_,k_block_cur,Int<0>{}), thr_sr_rA(_,_,k_block_cur));
             copy(copy_sr_B, thr_sr_sB(_,_,k_block_cur,Int<0>{}), thr_sr_rB(_,_,k_block_cur));
 
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
-
-        copy(thr_gs_rA(_,_,_,Int<1>{}), thr_gs_sA(_,_,_,Int<1>{}));
-        copy(thr_gs_rB(_,_,_,Int<1>{}), thr_gs_sB(_,_,_,Int<1>{}));
-        __syncthreads();
 
 
         //fill first pipe, consume second pipe
@@ -144,15 +147,18 @@ void tiled_mma_kernel(
 
         CUTE_UNROLL
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
+
+            if(k_block_cur == K_BLOCK_MAX-1){
+                copy(thr_gs_rA(_,_,_,Int<0>{}), thr_gs_sA(_,_,_,Int<0>{}));
+                copy(thr_gs_rB(_,_,_,Int<0>{}), thr_gs_sB(_,_,_,Int<0>{}));
+                __syncthreads();
+            }
+
             copy(copy_sr_A, thr_sr_sA(_,_,k_block_cur,Int<1>{}), thr_sr_rA(_,_,k_block_cur));
             copy(copy_sr_B, thr_sr_sB(_,_,k_block_cur,Int<1>{}), thr_sr_rB(_,_,k_block_cur));
 
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
-
-        copy(thr_gs_rA(_,_,_,Int<0>{}), thr_gs_sA(_,_,_,Int<0>{}));
-        copy(thr_gs_rB(_,_,_,Int<0>{}), thr_gs_sB(_,_,_,Int<0>{}));
-        __syncthreads();
     }
 
     axpby(alpha, thr_mma_rC, beta, thr_mma_gC);
