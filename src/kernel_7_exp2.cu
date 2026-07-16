@@ -120,17 +120,15 @@ void tiled_mma_kernel(
     CUTE_NO_UNROLL
     for(int k_tile = 0; k_tile<K_TILE_MAX; ++k_tile){
         int pipe = k_tile%2;
+        
+        auto k_tile_next = (k_tile+Int<1>{})%K_TILE_MAX;
+        copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
+        copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
 
         CUTE_UNROLL
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
             copy(copy_sr_A, thr_sr_sA(_,_,k_block_cur,pipe), thr_sr_rA(_,_,k_block_cur));
             copy(copy_sr_B, thr_sr_sB(_,_,k_block_cur,pipe), thr_sr_rB(_,_,k_block_cur));
-
-            if(k_block_cur == 0){
-                auto k_tile_next = (k_tile+Int<1>{})%K_TILE_MAX;
-                copy(copy_gs, thr_gs_gA(_,_,_,k_tile_next), thr_gs_rA);
-                copy(copy_gs, thr_gs_gB(_,_,_,k_tile_next), thr_gs_rB);
-            }
 
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
