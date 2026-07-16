@@ -123,14 +123,6 @@ void tiled_mma_kernel(
 
         CUTE_UNROLL
         for(int k_block_cur=0; k_block_cur<K_BLOCK_MAX; ++k_block_cur){
-
-            if(k_block_cur == K_BLOCK_MAX-1){
-                int next_pipe = (pipe+1)%2;
-                copy(thr_gs_rA, thr_gs_sA(_,_,_,next_pipe));
-                copy(thr_gs_rB, thr_gs_sB(_,_,_,next_pipe));
-                __syncthreads();
-            }
-
             copy(copy_sr_A, thr_sr_sA(_,_,k_block_cur,pipe), thr_sr_rA(_,_,k_block_cur));
             copy(copy_sr_B, thr_sr_sB(_,_,k_block_cur,pipe), thr_sr_rB(_,_,k_block_cur));
 
@@ -142,6 +134,11 @@ void tiled_mma_kernel(
 
             gemm(mma, thr_mma_rA(_,_,k_block_cur), thr_mma_rB(_,_,k_block_cur), thr_mma_rC);
         }
+
+        int next_pipe = (pipe+1)%2;
+        copy(thr_gs_rA, thr_gs_sA(_,_,_,next_pipe));
+        copy(thr_gs_rB, thr_gs_sB(_,_,_,next_pipe));
+        __syncthreads();
     }
     axpby(alpha, thr_mma_rC, beta, thr_mma_gC);
 }
