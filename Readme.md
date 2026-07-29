@@ -2,6 +2,8 @@
 
 A step-by-step implementation of CUDA matrix multiply-accumulate (MMA) kernels using **CuTe**, progressively optimized toward cuBLAS performance.
 
+worklog: [here](https://chamgeon.github.io/2026/07/19/CuTeMMA.html)
+
 All benchmarks run on an **NVIDIA T4 GPU** with matrix size **8192×8192×8192**.
 
 ---
