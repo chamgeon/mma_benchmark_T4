@@ -2,7 +2,7 @@
 # Run every kernel at every supported size and print CSV: kernel,size,gflops
 set -euo pipefail
 
-KERNELS=${KERNELS:-"1 2 3 4 5 6 7 99"}
+KERNELS=${KERNELS:-"1 2 3 4 5 6 7 8 99"}
 SIZES=${SIZES:-"1024 2048 4096 8192"}
 
 echo "kernel,size,gflops"

@@ -48,6 +48,9 @@ Applies `ldsm` instruction-level pipelining and fixes the MMA tile size to reduc
 **Kernel 7 — 2-Stage Pipelining**
 Introduces double-buffering (2-stage pipeline) to overlap data loading and computation, hiding memory latency and reaching 90% of cuBLAS throughput.
 
+**Kernel 8 — CTA Swizzle**
+Same as kernel 7, but remaps `blockIdx` so that consecutively launched CTAs cover a `GROUP_M`×N patch of output tiles (`GROUP_M = 8`) instead of a single tile column. Concurrently running CTAs then share A and B tiles through L2, reducing DRAM traffic at large sizes. CUDA does not guarantee CTA scheduling order, so this only affects performance, never correctness.
+
 ---
 
 ## Usage
@@ -55,7 +58,7 @@ Introduces double-buffering (2-stage pipeline) to overlap data loading and compu
 ### Build
 
 ```bash
-make
+make -j4    # parallel build; only changed files recompile
 ```
 
 ### Run
@@ -66,6 +69,7 @@ make
 # Examples
 ./runner 1    # Naive kernel
 ./runner 7    # 2-stage pipelining kernel
+./runner 8    # CTA swizzle kernel
 ./runner 99   # cuBLAS reference
 
 # Optional problem size (M=N=K): 1024, 2048, 4096, 8192 (default 8192)
