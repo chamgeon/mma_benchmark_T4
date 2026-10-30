@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="400" viewBox="0 0 760 400" font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+<rect width="760" height="400" rx="8" fill="#fcfcfb"/>
+<text x="64" y="30" font-size="16" font-weight="600" fill="#0b0b0b">Size sweep: kernel 7 vs kernel 8 vs cuBLAS</text>
+<text x="64" y="50" font-size="12" fill="#52514e">GFLOPS/sec, M = N = K</text>
+<line x1="64" x2="84" y1="68" y2="68" stroke="#52514e" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="90" y="72" font-size="12" fill="#52514e">cuBLAS</text>
+<line x1="157.2" x2="177.2" y1="68" y2="68" stroke="#eb6834" stroke-width="2"/>
+<text x="183.2" y="72" font-size="12" fill="#52514e">Kernel 7</text>
+<line x1="264.79999999999995" x2="284.79999999999995" y1="68" y2="68" stroke="#2a78d6" stroke-width="2"/>
+<text x="290.79999999999995" y="72" font-size="12" fill="#52514e">Kernel 8 (CTA swizzle)</text>
+<line x1="64" x2="640" y1="356.0" y2="356.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="360.0" font-size="11" fill="#898781" text-anchor="end">30k</text>
+<line x1="64" x2="640" y1="296.0" y2="296.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="300.0" font-size="11" fill="#898781" text-anchor="end">35k</text>
+<line x1="64" x2="640" y1="236.0" y2="236.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="240.0" font-size="11" fill="#898781" text-anchor="end">40k</text>
+<line x1="64" x2="640" y1="176.0" y2="176.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="180.0" font-size="11" fill="#898781" text-anchor="end">45k</text>
+<line x1="64" x2="640" y1="116.0" y2="116.0" stroke="#e1e0d9" stroke-width="1"/>
+<text x="56" y="120.0" font-size="11" fill="#898781" text-anchor="end">50k</text>
+<text x="64.0" y="376" font-size="12" fill="#52514e" text-anchor="middle">2048</text>
+<text x="352.0" y="376" font-size="12" fill="#52514e" text-anchor="middle">4096</text>
+<text x="640.0" y="376" font-size="12" fill="#52514e" text-anchor="middle">8192</text>
+<polyline points="64.0,248.0 352.0,139.6 640.0,132.7" fill="none" stroke="#52514e" stroke-width="2" stroke-dasharray="6 4"/>
+<circle cx="64.0" cy="248.0" r="4" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="352.0" cy="139.6" r="4" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="640.0" cy="132.7" r="4" fill="#52514e" stroke="#fcfcfb" stroke-width="2"/>
+<polyline points="64.0,288.8 352.0,177.3 640.0,197.8" fill="none" stroke="#eb6834" stroke-width="2"/>
+<circle cx="64.0" cy="288.8" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="352.0" cy="177.3" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="640.0" cy="197.8" r="4" fill="#eb6834" stroke="#fcfcfb" stroke-width="2"/>
+<polyline points="64.0,291.2 352.0,143.1 640.0,127.7" fill="none" stroke="#2a78d6" stroke-width="2"/>
+<circle cx="64.0" cy="291.2" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="352.0" cy="143.1" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<circle cx="640.0" cy="127.7" r="4" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"/>
+<text x="650" y="131.7" font-size="11" fill="#0b0b0b">K8 49,023</text>
+<text x="650" y="146.7" font-size="11" fill="#0b0b0b">cuBLAS 48,606</text>
+<text x="650" y="201.8" font-size="11" fill="#0b0b0b">K7 43,188</text>
+</svg>
