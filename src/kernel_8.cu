@@ -317,7 +317,9 @@ static void run_kernel_8_impl(){
 
 
     //correctness
-    #if 0
+    #if 1
+    // CPU reference is single-threaded; skip it for large sizes (8192 would take hours)
+    if constexpr (M <= 2048) {
 
     auto h_gmem_C_ref = h_gmem_C;
 
@@ -342,6 +344,7 @@ static void run_kernel_8_impl(){
         printf("evaluation FAILED\n");
     } // 1 ULP of fp16 ~= 0.015625 at values near 16
 
+    }
     #endif
 
 
@@ -349,7 +352,7 @@ static void run_kernel_8_impl(){
     run_gemm();
     cudaDeviceSynchronize();
 
-    #if 1
+    #if 0
     //main loop
     int num_runs = 50;
     cudaEvent_t start, stop;
