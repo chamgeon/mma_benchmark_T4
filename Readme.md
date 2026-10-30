@@ -67,7 +67,19 @@ make
 ./runner 1    # Naive kernel
 ./runner 7    # 2-stage pipelining kernel
 ./runner 99   # cuBLAS reference
+
+# Optional problem size (M=N=K): 1024, 2048, 4096, 8192 (default 8192)
+./runner 7 2048
 ```
+
+### Size sweep
+
+```bash
+./sweep.sh > sweep.csv                       # all kernels x all sizes, CSV output
+KERNELS="7 99" SIZES="2048 8192" ./sweep.sh  # subset
+```
+
+Sizes are compile-time template parameters, so each size gets the same fully static layouts as the original 8192 build.
 
 ### Dependencies
 

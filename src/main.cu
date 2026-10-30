@@ -11,9 +11,10 @@ void run_kernel_6(int argc, char **argv);
 void run_kernel_7(int argc, char **argv);
 
 int main(int argc, char **argv){
-    if (argc != 2){
-        printf("Usage: %s <kernel_number>\n", argv[0]);
+    if (argc != 2 && argc != 3){
+        printf("Usage: %s <kernel_number> [size]\n", argv[0]);
         printf("  Kernels: 1,2, ..., 7, 99(cublas)\n");
+        printf("  Size: M=N=K, one of 1024, 2048, 4096, 8192 (default 8192)\n");
         return 1;
     }
 

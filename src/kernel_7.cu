@@ -13,6 +13,8 @@
 #include <thrust/device_vector.h>
 #include <cute/tensor.hpp>
 
+#include "sizes.h"
+
 
 namespace cute
 {
@@ -190,16 +192,14 @@ void gemm_cpu_reference(
 
 
 
-void run_kernel_7(int argc, char** argv){
+template <int M, int N, int K>
+static void run_kernel_7_impl(){
     using namespace cute;
     using TABC = half_t;
     using CopyOP_GS = UniversalCopyCacheGlobal<uint128_t>;
     using CopyOP_SR = SM75_U32x4_LDSM_N;
     using MMAOP = SM75_16x8x8_F32F16F16F32_TN;
 
-    constexpr int M{8192};
-    constexpr int N(8192);
-    constexpr int K{8192};
     //for correctness test
     //constexpr int M{512};
     //constexpr int N{512};
@@ -360,4 +360,12 @@ void run_kernel_7(int argc, char** argv){
     #endif
 
     return;
+}
+
+
+void run_kernel_7(int argc, char** argv){
+    dispatch_size(argc, argv, [](auto size){
+        constexpr int S = decltype(size)::value;
+        run_kernel_7_impl<S, S, S>();
+    });
 }

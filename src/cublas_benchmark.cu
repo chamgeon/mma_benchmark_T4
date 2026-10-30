@@ -1,6 +1,7 @@
 #include <cuda_fp16.h>
 #include <cublas_v2.h>
 #include <assert.h>
+#include <cstdlib>
 
 #include <vector>
 #include <iostream>
@@ -15,11 +16,13 @@ inline half RAND_HALF(float LO = -1.0f, float HI = 1.0f)
 }
 
 void run_cublas(int argc, char *argv[]){
-    const unsigned int M = 8192;
-    const unsigned int N = 8192;
-    const unsigned int K = 8192;
-    const half alpha = __float2half(0.7f);
-    const half beta = __float2half(0.3f);
+    const unsigned int size = argc > 1 ? atoi(argv[1]) : 8192;
+    const unsigned int M = size;
+    const unsigned int N = size;
+    const unsigned int K = size;
+    // CUBLAS_COMPUTE_32F requires float alpha/beta
+    const float alpha = 0.7f;
+    const float beta = 0.3f;
     int num_runs = 50;
 
     half *A, *B, *C;

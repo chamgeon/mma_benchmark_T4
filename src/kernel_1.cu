@@ -23,6 +23,8 @@
 #include <thrust/device_vector.h>
 #include <cute/tensor.hpp>
 
+#include "sizes.h"
+
 
 template <class TABC, class glayoutA, class glayoutB, class glayoutC,
           class CTAtiler, class slayoutA, class slayoutB,
@@ -114,14 +116,12 @@ void gemm_cpu_reference(
 
 
 
-void run_kernel_1(int argc, char** argv){
+template <int M, int N, int K>
+static void run_kernel_1_impl(){
 
     using namespace cute;
     using TABC = half_t;
 
-    constexpr int M{8192};
-    constexpr int N{8192};
-    constexpr int K{8192};
     
     //for evaluation
     //constexpr int M{512};
@@ -258,4 +258,12 @@ void run_kernel_1(int argc, char** argv){
     #endif
 
     return;
+}
+
+
+void run_kernel_1(int argc, char** argv){
+    dispatch_size(argc, argv, [](auto size){
+        constexpr int S = decltype(size)::value;
+        run_kernel_1_impl<S, S, S>();
+    });
 }
